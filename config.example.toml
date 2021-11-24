@@ -1,0 +1,11 @@
+[bindings]
+a = "A"
+b = "S"
+select = "Q"
+start = "W"
+up = "Up"
+down = "Down"
+left = "Left"
+right = "Right"
+pause = "P"
+exit = "Escape"
