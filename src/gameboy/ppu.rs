@@ -32,7 +32,7 @@ pub enum PPUMode {
 	TransferringData,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Color {
 	White,
 	LGray,
@@ -90,6 +90,36 @@ impl Color {
 		}
 		out.reverse();
 		out
+	}
+}
+
+#[derive(Debug)]
+pub struct OAMEntry {
+	pub y: u8,
+	pub x: u8,
+	pub tile_idx: u8,
+	pub flags: u8,
+}
+
+impl OAMEntry {
+	pub fn parse(entry: [u8; 4]) -> Self {
+		Self { y: entry[0], x: entry[1], tile_idx: entry[2], flags: entry[3] }
+	}
+
+	pub fn covered_by_bg_window(&self) -> bool {
+		(self.flags >> 7) & 0b1 == 1
+	}
+
+	pub fn y_flip(&self) -> bool {
+		(self.flags >> 6) & 0b1 == 1
+	}
+
+	pub fn x_flip(&self) -> bool {
+		(self.flags >> 5) & 0b1 == 1
+	}
+
+	pub fn palette_number(&self) -> bool {
+		(self.flags >> 4) & 0b1 == 1
 	}
 }
 
@@ -170,21 +200,115 @@ impl Ppu {
 	}
 
 	fn draw_line(&mut self) {
+		let scrolled_y = self.ly.overflowing_add(self.scy).0 as usize;
 		for pixel_idx in 0..FB_WIDTH as u8 {
 			let scrolled_x = pixel_idx.overflowing_add(self.scx).0 as usize;
-			let scrolled_y = self.ly.overflowing_add(self.scy).0 as usize;
+
+			// BG
 			let tilemap_idx = scrolled_x / 8 + ((scrolled_y as usize / 8) * 32);
 			let tilemap_value = self.read_tile_map()[tilemap_idx];
-
 			let color = Self::parse_tile_color(
-				self.read_tile(tilemap_value),
+				self.read_bg_win_tile(tilemap_value),
 				scrolled_x % 8,
 				scrolled_y % 8,
 			);
-			let dest_idx_base = ((self.scy as usize * FB_WIDTH as usize) + pixel_idx as usize) * 4;
+			let dest_idx_base = (((self.ly as usize + self.scy as usize) * FB_WIDTH as usize)
+				+ pixel_idx as usize)
+				* 4;
 			for (idx, byte) in color.rgba().iter().enumerate() {
 				self.framebuffer[dest_idx_base + idx] = *byte;
 			}
+		}
+
+		// Sprite
+		let mut found_sprites = 0;
+		let mut sprite_line = [0u8; 256 * 4];
+		let sprite_height = if (self.lcdc >> 2) & 0b1 == 1 { 16 } else { 8 };
+
+		for x in 0..40 {
+			if found_sprites >= 10 {
+				break;
+			}
+
+			let oam_offset = x * 4;
+			let entry = OAMEntry::parse([
+				self.oam[oam_offset],
+				self.oam[oam_offset + 1],
+				self.oam[oam_offset + 2],
+				self.oam[oam_offset + 3],
+			]);
+
+			let mut base = entry.y.overflowing_sub(sprite_height).0;
+			let mut in_range = None;
+
+			for x in 0..sprite_height {
+				if base as usize == scrolled_y {
+					in_range = Some(x);
+					found_sprites += 1;
+					break;
+				}
+				base = base.overflowing_add(1).0;
+			}
+
+			if let Some(mut tile_y_idx) = in_range {
+				let is_second_tile = tile_y_idx >= 8;
+
+				if is_second_tile {
+					tile_y_idx -= 8;
+				}
+
+				if entry.y_flip() {
+					tile_y_idx = 8 - tile_y_idx;
+				}
+
+				let tile_idx =
+					if is_second_tile { entry.tile_idx | 1 } else { entry.tile_idx & 0xFE };
+
+				for x in 0..8 {
+					let fb_x = entry.x.overflowing_sub(8 - x).0;
+
+					let sprite_line_base = fb_x as usize * 4;
+
+					let tile_x_idx = if entry.x_flip() { 8 - x } else { x };
+
+					let color = Self::parse_tile_color(
+						self.read_obj_tile(tile_idx),
+						tile_x_idx as usize,
+						tile_y_idx as usize,
+					);
+
+					let bg_fb_idx = (((self.ly as usize + self.scy as usize) * FB_WIDTH as usize)
+						+ fb_x as usize) * 4;
+					let ok_to_draw = if entry.covered_by_bg_window() {
+						let rgba = [
+							self.framebuffer[bg_fb_idx],
+							self.framebuffer[bg_fb_idx + 1],
+							self.framebuffer[bg_fb_idx + 2],
+							self.framebuffer[bg_fb_idx + 3],
+						];
+						&rgba != Color::Black.rgba()
+					} else {
+						true
+					};
+
+					if ok_to_draw {
+						for (idx, byte) in color.rgba().iter().enumerate() {
+							sprite_line[sprite_line_base + idx] = *byte;
+						}
+					}
+				}
+			}
+		}
+
+		for x in (self.scx as usize)..(self.scx as usize + FB_WIDTH as usize) {
+			let x = x % FB_WIDTH as usize;
+
+			let base = x * 4;
+
+			self.sprite_framebuffer[base] = sprite_line[x];
+			self.sprite_framebuffer[base + 1] = sprite_line[x + 1];
+			self.sprite_framebuffer[base + 2] = sprite_line[x + 2];
+			self.sprite_framebuffer[base + 3] = sprite_line[x + 3];
 		}
 	}
 
@@ -346,13 +470,17 @@ impl Ppu {
 		self.stat = value & 0b0111_1000;
 	}
 
-	pub fn read_tile(&self, obj: u8) -> &[u8] {
+	pub fn read_obj_tile(&self, idx: u8) -> &[u8] {
+		&self.vram[idx as usize * 16..((idx as usize + 1) * 16)]
+	}
+
+	pub fn read_bg_win_tile(&self, idx: u8) -> &[u8] {
 		if (self.lcdc >> 4) & 0b1 == 1 {
-			&self.vram[obj as usize * 16..((obj as usize + 1) * 16)]
-		} else if obj < 128 {
-			&self.vram[0x1000 + (obj as usize * 16)..0x1000 + ((obj as usize + 1) * 16)]
+			&self.vram[idx as usize * 16..((idx as usize + 1) * 16)]
+		} else if idx < 128 {
+			&self.vram[0x1000 + (idx as usize * 16)..0x1000 + ((idx as usize + 1) * 16)]
 		} else {
-			let adjusted_obj = obj - 128;
+			let adjusted_obj = idx - 128;
 			&self.vram
 				[0x800 + (adjusted_obj as usize * 16)..0x800 + ((adjusted_obj as usize + 1) * 16)]
 		}
