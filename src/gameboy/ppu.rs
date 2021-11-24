@@ -164,6 +164,8 @@ impl Ppu {
 			if (self.stat >> 6) & 0b1 == 1 {
 				interrupts.write_if_lcd_stat(true);
 			}
+		} else {
+			self.stat &= !(1 << 2);
 		}
 	}
 

@@ -51,7 +51,7 @@ pub const FB_HEIGHT: u32 = 144;
 pub const FB_WIDTH: u32 = 160;
 
 #[derive(Debug, Default)]
-pub struct Keymap {
+struct Keymap {
 	pub down: bool,
 	pub up: bool,
 	pub left: bool,
