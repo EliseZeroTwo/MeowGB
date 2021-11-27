@@ -1,3 +1,4 @@
+mod cpu;
 mod interrupts;
 mod joypad;
 mod mapper;
@@ -11,6 +12,8 @@ use mapper::Mapper;
 use memory::Memory;
 use ppu::Ppu;
 use timer::Timer;
+
+use self::cpu::Registers;
 
 pub struct DmaState {
 	pub base: u8,
@@ -36,6 +39,7 @@ pub struct Gameboy {
 	cartridge: Option<Box<dyn Mapper>>,
 	interrupts: Interrupts,
 	timer: Timer,
+	pub registers: Registers,
 	pub joypad: Joypad,
 	pub dma: DmaState,
 }
@@ -50,6 +54,7 @@ impl Gameboy {
 			joypad: Joypad::new(),
 			dma: DmaState::new(),
 			ppu: Ppu::new(),
+			registers: Registers::default(),
 		}
 	}
 
@@ -58,13 +63,11 @@ impl Gameboy {
 			self.interrupts.write_if_timer(true);
 		}
 
-		self.tick_cpu();
+		cpu::tick_cpu(self);
 		let redraw_requested = self.ppu.tick(&mut self.interrupts);
 		self.tick_dma();
 		redraw_requested
 	}
-
-	fn tick_cpu(&mut self) {}
 
 	fn tick_dma(&mut self) {
 		if self.dma.remaining_delay > 0 {
@@ -166,8 +169,11 @@ impl Gameboy {
 		}
 	}
 
-	pub fn cpu_read_u8(&self, address: u16) -> u8 {
-		if self.dma.remaining_cycles == 0 {
+	pub fn cpu_read_u8(&mut self, address: u16) {
+		assert!(!self.registers.mem_op_happened);
+		assert!(self.registers.mem_read_hold.is_none());
+		self.registers.mem_op_happened = true;
+		self.registers.mem_read_hold = Some(if self.dma.remaining_cycles == 0 {
 			match address {
 				0..=0xFF if !self.memory.bootrom_disabled => self.memory.bootrom[address as usize],
 				0..=0x7FFF => match self.cartridge.as_ref() {
@@ -194,10 +200,12 @@ impl Gameboy {
 				0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80],
 				0xFFFF => self.interrupts.interrupt_enable,
 			}
-		}
+		})
 	}
 
 	pub fn cpu_write_u8(&mut self, address: u16, value: u8) {
+		assert!(!self.registers.mem_op_happened);
+		self.registers.mem_op_happened = true;
 		if self.dma.remaining_cycles == 0 {
 			match address {
 				0..=0xFF if !self.memory.bootrom_disabled => {}
