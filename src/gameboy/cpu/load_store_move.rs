@@ -380,3 +380,29 @@ pub fn ld_deref_imm_u16_a(state: &mut Gameboy) -> CycleResult {
 		_ => unreachable!(),
 	}
 }
+
+macro_rules! define_ld_reg_imm_u8 {
+	($lreg:ident) => {
+		paste::paste! {
+			pub fn [<ld_deref_hl_ $lreg>](state: &mut Gameboy) -> CycleResult {
+				match state.registers.cycle {
+					0 => {
+						state.cpu_write_u8(state.registers.get_hl(), state.registers.$lreg);
+						state.registers.opcode_bytecount = Some(1);
+						CycleResult::NeedsMore
+					},
+					1 => CycleResult::Finished,
+					_ => unreachable!(),
+				}
+			}
+		}
+	};
+}
+
+define_ld_reg_imm_u8!(b);
+define_ld_reg_imm_u8!(c);
+define_ld_reg_imm_u8!(d);
+define_ld_reg_imm_u8!(e);
+define_ld_reg_imm_u8!(h);
+define_ld_reg_imm_u8!(l);
+define_ld_reg_imm_u8!(a);
