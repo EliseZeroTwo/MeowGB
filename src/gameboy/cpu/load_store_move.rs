@@ -381,7 +381,7 @@ pub fn ld_deref_imm_u16_a(state: &mut Gameboy) -> CycleResult {
 	}
 }
 
-macro_rules! define_ld_reg_imm_u8 {
+macro_rules! define_ld_deref_hl_reg {
 	($lreg:ident) => {
 		paste::paste! {
 			pub fn [<ld_deref_hl_ $lreg>](state: &mut Gameboy) -> CycleResult {
@@ -399,10 +399,60 @@ macro_rules! define_ld_reg_imm_u8 {
 	};
 }
 
-define_ld_reg_imm_u8!(b);
-define_ld_reg_imm_u8!(c);
-define_ld_reg_imm_u8!(d);
-define_ld_reg_imm_u8!(e);
-define_ld_reg_imm_u8!(h);
-define_ld_reg_imm_u8!(l);
-define_ld_reg_imm_u8!(a);
+define_ld_deref_hl_reg!(b);
+define_ld_deref_hl_reg!(c);
+define_ld_deref_hl_reg!(d);
+define_ld_deref_hl_reg!(e);
+define_ld_deref_hl_reg!(h);
+define_ld_deref_hl_reg!(l);
+define_ld_deref_hl_reg!(a);
+
+macro_rules! define_push_pop_reg {
+	($reg:ident) => {
+		paste::paste! {
+			pub fn [<push_ $reg>](state: &mut Gameboy) -> CycleResult {
+				match state.registers.cycle {
+					0 => CycleResult::NeedsMore,
+					1 => {
+						state.cpu_push_stack((state.registers.[<get_ $reg>]() >> 8) as u8);
+						CycleResult::NeedsMore
+					},
+					2 => {
+						state.cpu_push_stack(state.registers.[<get_ $reg>]() as u8);
+						state.registers.opcode_bytecount = Some(1);
+						CycleResult::NeedsMore
+					},
+					3 => CycleResult::Finished,
+					_ => unreachable!(),
+				}
+			}
+			
+			pub fn [<pop_ $reg>](state: &mut Gameboy) -> CycleResult {
+				match state.registers.cycle {
+					0 => {
+						state.cpu_pop_stack();
+						CycleResult::NeedsMore
+					},
+					1 => {
+						let lsb = state.registers.take_mem() as u16;
+						state.registers.set_hold(lsb);
+						state.cpu_pop_stack();
+						CycleResult::NeedsMore
+					},
+					2 => {
+						let val = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
+						state.registers.[<set_ $reg>](val);
+						state.registers.opcode_bytecount = Some(1);
+						CycleResult::Finished
+					},
+					_ => unreachable!(),
+				}
+			}
+		}
+	};
+}
+
+define_push_pop_reg!(bc);
+define_push_pop_reg!(de);
+define_push_pop_reg!(hl);
+define_push_pop_reg!(af);
