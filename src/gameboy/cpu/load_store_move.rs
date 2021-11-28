@@ -100,61 +100,25 @@ macro_rules! define_ld_reg_reg {
 	};
 }
 
-define_ld_reg_reg!(b, b);
-define_ld_reg_reg!(b, c);
-define_ld_reg_reg!(b, d);
-define_ld_reg_reg!(b, e);
-define_ld_reg_reg!(b, h);
-define_ld_reg_reg!(b, l);
-define_ld_reg_reg!(b, a);
+macro_rules! define_ld_reg_regs {
+	($lreg:ident) => {
+		define_ld_reg_reg!($lreg, b);
+		define_ld_reg_reg!($lreg, c);
+		define_ld_reg_reg!($lreg, d);
+		define_ld_reg_reg!($lreg, e);
+		define_ld_reg_reg!($lreg, h);
+		define_ld_reg_reg!($lreg, l);
+		define_ld_reg_reg!($lreg, a);
+	};
+}
 
-define_ld_reg_reg!(c, b);
-define_ld_reg_reg!(c, c);
-define_ld_reg_reg!(c, d);
-define_ld_reg_reg!(c, e);
-define_ld_reg_reg!(c, h);
-define_ld_reg_reg!(c, l);
-define_ld_reg_reg!(c, a);
-
-define_ld_reg_reg!(d, b);
-define_ld_reg_reg!(d, c);
-define_ld_reg_reg!(d, d);
-define_ld_reg_reg!(d, e);
-define_ld_reg_reg!(d, h);
-define_ld_reg_reg!(d, l);
-define_ld_reg_reg!(d, a);
-
-define_ld_reg_reg!(e, b);
-define_ld_reg_reg!(e, c);
-define_ld_reg_reg!(e, d);
-define_ld_reg_reg!(e, e);
-define_ld_reg_reg!(e, h);
-define_ld_reg_reg!(e, l);
-define_ld_reg_reg!(e, a);
-
-define_ld_reg_reg!(h, b);
-define_ld_reg_reg!(h, c);
-define_ld_reg_reg!(h, d);
-define_ld_reg_reg!(h, e);
-define_ld_reg_reg!(h, h);
-define_ld_reg_reg!(h, l);
-define_ld_reg_reg!(h, a);
-
-define_ld_reg_reg!(l, b);
-define_ld_reg_reg!(l, c);
-define_ld_reg_reg!(l, d);
-define_ld_reg_reg!(l, e);
-define_ld_reg_reg!(l, h);
-define_ld_reg_reg!(l, l);
-define_ld_reg_reg!(l, a);
-
-define_ld_reg_reg!(a, b);
-define_ld_reg_reg!(a, c);
-define_ld_reg_reg!(a, d);
-define_ld_reg_reg!(a, e);
-define_ld_reg_reg!(a, h);
-define_ld_reg_reg!(a, l);
-define_ld_reg_reg!(a, a);
+define_ld_reg_regs!(b);
+define_ld_reg_regs!(c);
+define_ld_reg_regs!(d);
+define_ld_reg_regs!(e);
+define_ld_reg_regs!(h);
+define_ld_reg_regs!(l);
+define_ld_reg_regs!(a);
 
 macro_rules! define_ld_reg_deref {
 	($lreg:ident, $rreg:ident) => {
@@ -249,6 +213,52 @@ pub fn ld_a_hl_plus(state: &mut Gameboy) -> CycleResult {
 			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		}
+		_ => unreachable!(),
+	}
+}
+
+macro_rules! define_ld_reg_imm_u8 {
+	($lreg:ident) => {
+		paste::paste! {
+			pub fn [<ld_ $lreg _imm_u8>](state: &mut Gameboy) -> CycleResult {
+				match state.registers.cycle {
+					0 => {
+						state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
+						CycleResult::NeedsMore
+					},
+					1 => {
+						state.registers.$lreg = state.registers.take_mem();
+						state.registers.opcode_bytecount = Some(2);
+						CycleResult::Finished
+					},
+					_ => unreachable!(),
+				}
+			}
+		}
+	};
+}
+
+define_ld_reg_imm_u8!(b);
+define_ld_reg_imm_u8!(c);
+define_ld_reg_imm_u8!(d);
+define_ld_reg_imm_u8!(e);
+define_ld_reg_imm_u8!(h);
+define_ld_reg_imm_u8!(l);
+define_ld_reg_imm_u8!(a);
+
+pub fn ld_deref_hl_imm_u8(state: &mut Gameboy) -> CycleResult {
+	match state.registers.cycle {
+		0 => {
+			state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
+			CycleResult::NeedsMore
+		}
+		1 => {
+			let imm = state.registers.take_mem();
+			state.cpu_write_u8(state.registers.get_hl(), imm);
+			state.registers.opcode_bytecount = Some(2);
+			CycleResult::NeedsMore
+		}
+		2 => CycleResult::Finished,
 		_ => unreachable!(),
 	}
 }
