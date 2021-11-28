@@ -99,7 +99,7 @@ macro_rules! define_bit_reg {
 						state.registers.set_zero(state.registers.$reg & (1 << $bit) == 0);
 						state.registers.set_subtract(false);
 						state.registers.set_half_carry(true);
-						state.registers.opcode_len = Some(2);
+						state.registers.opcode_bytecount = Some(2);
 						CycleResult::Finished
 					}
 					_ => unreachable!(),
@@ -144,7 +144,7 @@ macro_rules! define_bit_deref_hl {
 						state.registers.set_zero(mem_read & (1 << $bit) == 0);
 						state.registers.set_subtract(false);
 						state.registers.set_half_carry(true);
-						state.registers.opcode_len = Some(2);
+						state.registers.opcode_bytecount = Some(2);
 						CycleResult::Finished
 					}
 					_ => unreachable!(),

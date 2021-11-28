@@ -1,4 +1,5 @@
 mod alu;
+mod flow;
 mod load_store_move;
 mod prefixed;
 
@@ -56,7 +57,7 @@ pub struct Registers {
 	// Not actual registers
 	pub cycle: u8,
 	pub hold: Option<u16>,
-	pub opcode_len: Option<u8>,
+	pub opcode_bytecount: Option<u8>,
 	pub current_opcode: Option<u8>,
 	pub current_prefixed_opcode: Option<u8>,
 	pub mem_read_hold: Option<u8>,
@@ -122,11 +123,16 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		0x08 => load_store_move::ld_deref_imm_u16_sp,
 		0x0a => load_store_move::ld_a_deref_bc,
 		0x11 => load_store_move::ld_de_imm_u16,
+		0x18 => flow::jr_i8,
 		0x1a => load_store_move::ld_a_deref_de,
+		0x20 => flow::jr_nz_i8,
 		0x21 => load_store_move::ld_hl_imm_u16,
 		0x22 => load_store_move::ld_hl_plus_a,
+		0x28 => flow::jr_z_i8,
 		0x2a => load_store_move::ld_a_hl_plus,
+		0x30 => flow::jr_nc_i8,
 		0x32 => load_store_move::ld_hl_minus_a,
+		0x38 => flow::jr_c_i8,
 		0x3a => load_store_move::ld_a_hl_minus,
 		0x31 => load_store_move::ld_sp_imm_u16,
 		0x40 => load_store_move::ld_b_b,
@@ -201,15 +207,32 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		0xAD => alu::xor_a_l,
 		0xAE => alu::xor_a_deref_hl,
 		0xAF => alu::xor_a_a,
+		0xC0 => flow::ret_nz,
+		0xC2 => flow::jp_nz_u16,
+		0xC3 => flow::jp_u16,
+		0xC4 => flow::call_nz_u16,
+		0xC8 => flow::ret_z,
+		0xC9 => flow::ret,
+		0xCA => flow::jp_z_u16,
 		0xCB => prefixed::prefixed_handler,
+		0xCC => flow::call_z_u16,
+		0xCD => flow::call_u16,
+		0xD0 => flow::ret_nc,
+		0xD2 => flow::jp_nc_u16,
+		0xD4 => flow::call_nc_u16,
+		0xD8 => flow::ret_c,
+		0xD9 => flow::reti,
+		0xDA => flow::jp_c_u16,
+		0xDC => flow::call_c_u16,
 		0xDE => alu::sbc_a_imm_u8,
+		0xE9 => flow::jp_hl,
 		0xEE => alu::xor_a_imm_u8,
 		0xF9 => load_store_move::ld_sp_hl,
 		unknown => panic!("Unrecognized opcode: {:#X}\nRegisters: {:#?}", unknown, state.registers),
 	}(state);
 
 	if instruction_result == CycleResult::Finished {
-		match state.registers.opcode_len {
+		match state.registers.opcode_bytecount {
 			Some(len) => state.registers.pc += len as u16,
 			None => panic!("Forgot to set opcode len for {:#X}", opcode),
 		}
@@ -222,7 +245,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		state.registers.cycle = 0;
 		state.registers.current_prefixed_opcode = None;
 		state.registers.current_opcode = None;
-		state.registers.opcode_len = None;
+		state.registers.opcode_bytecount = None;
 		log::trace!("Cycle finished");
 	} else {
 		state.registers.cycle += 1;

@@ -35,7 +35,7 @@ macro_rules! define_xor_reg {
 						state.registers.set_subtract(false);
 						state.registers.set_half_carry(false);
 						state.registers.set_carry(false);
-						state.registers.opcode_len = Some(1);
+						state.registers.opcode_bytecount = Some(1);
 						CycleResult::Finished
 					}
 					_ => unreachable!(),
@@ -58,7 +58,7 @@ macro_rules! define_sbc_reg {
                         state.registers.set_subtract(true);
                         state.registers.set_half_carry(half_carry);
                         state.registers.set_carry(carry);
-                        state.registers.opcode_len = Some(1);
+                        state.registers.opcode_bytecount = Some(1);
                         CycleResult::Finished
                     },
                     _ => unreachable!(),
@@ -88,7 +88,7 @@ pub fn xor_a_deref_hl(state: &mut Gameboy) -> CycleResult {
 			state.registers.set_subtract(false);
 			state.registers.set_half_carry(false);
 			state.registers.set_carry(false);
-			state.registers.opcode_len = Some(1);
+			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -107,7 +107,7 @@ pub fn xor_a_imm_u8(state: &mut Gameboy) -> CycleResult {
 			state.registers.set_subtract(false);
 			state.registers.set_half_carry(false);
 			state.registers.set_carry(false);
-			state.registers.opcode_len = Some(2);
+			state.registers.opcode_bytecount = Some(2);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -140,7 +140,7 @@ pub fn sbc_a_deref_hl(state: &mut Gameboy) -> CycleResult {
 			state.registers.set_subtract(true);
 			state.registers.set_half_carry(half_carry);
 			state.registers.set_carry(carry);
-			state.registers.opcode_len = Some(1);
+			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -165,7 +165,7 @@ pub fn sbc_a_imm_u8(state: &mut Gameboy) -> CycleResult {
 			state.registers.set_subtract(true);
 			state.registers.set_half_carry(half_carry);
 			state.registers.set_carry(carry);
-			state.registers.opcode_len = Some(1);
+			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),

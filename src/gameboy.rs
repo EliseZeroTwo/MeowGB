@@ -237,4 +237,14 @@ impl Gameboy {
 			}
 		}
 	}
+
+	pub fn cpu_push_stack(&mut self, byte: u8) {
+		self.registers.sp = self.registers.sp.overflowing_sub(1).0;
+		self.cpu_write_u8(self.registers.sp, byte)
+	}
+
+	pub fn cpu_pop_stack(&mut self) {
+		self.cpu_read_u8(self.registers.sp);
+		self.registers.sp = self.registers.sp.overflowing_add(1).0;
+	}
 }

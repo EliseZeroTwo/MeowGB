@@ -22,7 +22,7 @@ macro_rules! define_ld_reg_imm_u16 {
 						reg &= 0xFF;
 						reg |= (state.registers.take_mem() as u16) << 8;
 						state.registers.[<set_ $reg>](reg);
-						state.registers.opcode_len = Some(3);
+						state.registers.opcode_bytecount = Some(3);
 						CycleResult::Finished
 					},
 					_ => unreachable!(),
@@ -47,7 +47,7 @@ pub fn ld_sp_hl(state: &mut Gameboy) -> CycleResult {
 		1 => {
 			state.registers.sp &= 0xFF;
 			state.registers.sp |= (state.registers.h as u16) << 8;
-			state.registers.opcode_len = Some(3);
+			state.registers.opcode_bytecount = Some(3);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -75,7 +75,7 @@ pub fn ld_deref_imm_u16_sp(state: &mut Gameboy) -> CycleResult {
 		3 => {
 			let addr = state.registers.take_hold().overflowing_add(1).0;
 			state.cpu_write_u8(addr, (state.registers.sp >> 8) as u8);
-			state.registers.opcode_len = Some(3);
+			state.registers.opcode_bytecount = Some(3);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -90,7 +90,7 @@ macro_rules! define_ld_reg_reg {
 					0 => {
 						let res = state.registers.$rreg;
 						state.registers.$lreg = res;
-						state.registers.opcode_len = Some(1);
+						state.registers.opcode_bytecount = Some(1);
 						CycleResult::Finished
 					},
 					_ => unreachable!(),
@@ -167,7 +167,7 @@ macro_rules! define_ld_reg_deref {
 					},
 					1 => {
 						state.registers.$lreg = state.registers.take_mem();
-						state.registers.opcode_len = Some(1);
+						state.registers.opcode_bytecount = Some(1);
 						CycleResult::Finished
 					},
 					_ => unreachable!(),
@@ -196,7 +196,7 @@ pub fn ld_hl_minus_a(state: &mut Gameboy) -> CycleResult {
 		1 => {
 			let reg = state.registers.get_hl().overflowing_sub(1).0;
 			state.registers.set_hl(reg);
-			state.registers.opcode_len = Some(1);
+			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -213,7 +213,7 @@ pub fn ld_a_hl_minus(state: &mut Gameboy) -> CycleResult {
 			state.registers.a = state.registers.take_mem();
 			let reg = state.registers.get_hl().overflowing_sub(1).0;
 			state.registers.set_hl(reg);
-			state.registers.opcode_len = Some(1);
+			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -229,7 +229,7 @@ pub fn ld_hl_plus_a(state: &mut Gameboy) -> CycleResult {
 		1 => {
 			let reg = state.registers.get_hl().overflowing_add(1).0;
 			state.registers.set_hl(reg);
-			state.registers.opcode_len = Some(1);
+			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -246,7 +246,7 @@ pub fn ld_a_hl_plus(state: &mut Gameboy) -> CycleResult {
 			state.registers.a = state.registers.take_mem();
 			let reg = state.registers.get_hl().overflowing_add(1).0;
 			state.registers.set_hl(reg);
-			state.registers.opcode_len = Some(1);
+			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
