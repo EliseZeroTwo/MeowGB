@@ -4,6 +4,7 @@ mod joypad;
 mod mapper;
 mod memory;
 mod ppu;
+mod sound;
 mod timer;
 
 use interrupts::Interrupts;
@@ -13,7 +14,7 @@ use memory::Memory;
 use ppu::Ppu;
 use timer::Timer;
 
-use self::cpu::Registers;
+use self::{cpu::Registers, sound::Sound};
 
 pub struct DmaState {
 	pub base: u8,
@@ -42,6 +43,7 @@ pub struct Gameboy {
 	pub registers: Registers,
 	pub joypad: Joypad,
 	pub dma: DmaState,
+	pub sound: Sound,
 }
 
 impl Gameboy {
@@ -55,6 +57,7 @@ impl Gameboy {
 			dma: DmaState::new(),
 			ppu: Ppu::new(),
 			registers: Registers::default(),
+			sound: Sound::default(),
 		}
 	}
 
@@ -102,7 +105,31 @@ impl Gameboy {
 			0xFF07 => self.timer.read_tac(),
 			0xFF08..=0xFF0E => 0, // Unused
 			0xFF0F => self.interrupts.interrupt_enable,
-			0xFF10..=0xFF3F => unimplemented!("Sound IO"),
+			0xFF10 => self.sound.nr10,
+			0xFF11 => self.sound.nr11,
+			0xFF12 => self.sound.nr12,
+			0xFF13 => self.sound.nr13,
+			0xFF14 => self.sound.nr14,
+			0xFF15 => 0,
+			0xFF16 => self.sound.nr21,
+			0xFF17 => self.sound.nr22,
+			0xFF18 => self.sound.nr23,
+			0xFF19 => self.sound.nr24,
+			0xFF1A => self.sound.nr30,
+			0xFF1B => self.sound.nr31,
+			0xFF1C => self.sound.nr32,
+			0xFF1D => self.sound.nr33,
+			0xFF1E => self.sound.nr34,
+			0xFF1F => 0,
+			0xFF20 => self.sound.nr41,
+			0xFF21 => self.sound.nr42,
+			0xFF22 => self.sound.nr43,
+			0xFF23 => self.sound.nr44,
+			0xFF24 => self.sound.nr50,
+			0xFF25 => self.sound.nr51,
+			0xFF26 => self.sound.nr52,
+			0xFF27..=0xFF2F => 0,
+			0xFF30..=0xFF3F => self.sound.wave_pattern_ram[address as usize - 0xFF30],
 			0xFF40 => self.ppu.lcdc,
 			0xFF41 => self.ppu.stat,
 			0xFF42 => self.ppu.scy,
@@ -137,7 +164,31 @@ impl Gameboy {
 			0xFF07 => self.timer.write_tac(value),
 			0xFF08..=0xFF0E => {} // Unused
 			0xFF0F => self.interrupts.interrupt_enable = value & 0b1_1111,
-			0xFF10..=0xFF3F => unimplemented!("Sound IO"),
+			0xFF10 => self.sound.nr10 = value,
+			0xFF11 => self.sound.nr11 = value,
+			0xFF12 => self.sound.nr12 = value,
+			0xFF13 => self.sound.nr13 = value,
+			0xFF14 => self.sound.nr14 = value,
+			0xFF15 => {}
+			0xFF16 => self.sound.nr21 = value,
+			0xFF17 => self.sound.nr22 = value,
+			0xFF18 => self.sound.nr23 = value,
+			0xFF19 => self.sound.nr24 = value,
+			0xFF1A => self.sound.nr30 = value,
+			0xFF1B => self.sound.nr31 = value,
+			0xFF1C => self.sound.nr32 = value,
+			0xFF1D => self.sound.nr33 = value,
+			0xFF1E => self.sound.nr34 = value,
+			0xFF1F => {}
+			0xFF20 => self.sound.nr41 = value,
+			0xFF21 => self.sound.nr42 = value,
+			0xFF22 => self.sound.nr43 = value,
+			0xFF23 => self.sound.nr44 = value,
+			0xFF24 => self.sound.nr50 = value,
+			0xFF25 => self.sound.nr51 = value,
+			0xFF26 => self.sound.nr52 = value,
+			0xFF27..=0xFF2F => {}
+			0xFF30..=0xFF3F => self.sound.wave_pattern_ram[address as usize - 0xFF30] = value,
 			0xFF40 => self.ppu.lcdc = value,
 			0xFF41 => self.ppu.cpu_write_stat(value),
 			0xFF42 => self.ppu.scy = value,
