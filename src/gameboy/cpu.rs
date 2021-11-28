@@ -1,5 +1,6 @@
 mod alu;
 mod load_store_move;
+mod prefixed;
 
 use super::Gameboy;
 
@@ -57,6 +58,7 @@ pub struct Registers {
 	pub hold: Option<u16>,
 	pub opcode_len: Option<u8>,
 	pub current_opcode: Option<u8>,
+	pub current_prefixed_opcode: Option<u8>,
 	pub mem_read_hold: Option<u8>,
 	pub mem_op_happened: bool,
 }
@@ -199,6 +201,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		0xAD => alu::xor_a_l,
 		0xAE => alu::xor_a_deref_hl,
 		0xAF => alu::xor_a_a,
+		0xCB => prefixed::prefixed_handler,
 		0xDE => alu::sbc_a_imm_u8,
 		0xEE => alu::xor_a_imm_u8,
 		0xF9 => load_store_move::ld_sp_hl,
@@ -217,6 +220,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		}
 
 		state.registers.cycle = 0;
+		state.registers.current_prefixed_opcode = None;
 		state.registers.current_opcode = None;
 		state.registers.opcode_len = None;
 		log::trace!("Cycle finished");
