@@ -262,3 +262,121 @@ pub fn ld_deref_hl_imm_u8(state: &mut Gameboy) -> CycleResult {
 		_ => unreachable!(),
 	}
 }
+
+pub fn ldh_a_imm_u8(state: &mut Gameboy) -> CycleResult {
+	match state.registers.cycle {
+		0 => {
+			state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
+			CycleResult::NeedsMore
+		}
+		1 => {
+			let imm = state.registers.take_mem();
+			let addr = 0xFF00u16 | imm as u16;
+			state.cpu_read_u8(addr);
+			CycleResult::NeedsMore
+		}
+		2 => {
+			state.registers.a = state.registers.take_mem();
+			state.registers.opcode_bytecount = Some(2);
+			CycleResult::Finished
+		}
+		_ => unreachable!(),
+	}
+}
+
+pub fn ldh_imm_u8_a(state: &mut Gameboy) -> CycleResult {
+	match state.registers.cycle {
+		0 => {
+			state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
+			CycleResult::NeedsMore
+		}
+		1 => {
+			let imm = state.registers.take_mem();
+			let addr = 0xFF00u16 | imm as u16;
+			state.cpu_write_u8(addr, state.registers.a);
+			state.registers.opcode_bytecount = Some(2);
+			CycleResult::NeedsMore
+		}
+		2 => CycleResult::Finished,
+		_ => unreachable!(),
+	}
+}
+
+pub fn ldh_a_deref_c(state: &mut Gameboy) -> CycleResult {
+	match state.registers.cycle {
+		0 => {
+			let imm = state.registers.c;
+			let addr = 0xFF00u16 | imm as u16;
+			state.cpu_read_u8(addr);
+			CycleResult::NeedsMore
+		}
+		1 => {
+			state.registers.a = state.registers.take_mem();
+			state.registers.opcode_bytecount = Some(1);
+			CycleResult::Finished
+		}
+		_ => unreachable!(),
+	}
+}
+
+pub fn ldh_deref_c_a(state: &mut Gameboy) -> CycleResult {
+	match state.registers.cycle {
+		0 => {
+			let addr = 0xFF00u16 | state.registers.c as u16;
+			state.cpu_write_u8(addr, state.registers.a);
+			state.registers.opcode_bytecount = Some(1);
+			CycleResult::NeedsMore
+		}
+		1 => CycleResult::Finished,
+		_ => unreachable!(),
+	}
+}
+
+pub fn ld_a_deref_imm_u16(state: &mut Gameboy) -> CycleResult {
+	match state.registers.cycle {
+		0 => {
+			state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
+			CycleResult::NeedsMore
+		}
+		1 => {
+			let lsb = state.registers.take_mem() as u16;
+			state.cpu_read_u8(state.registers.pc.overflowing_add(2).0);
+			state.registers.set_hold(lsb);
+			CycleResult::NeedsMore
+		}
+		2 => {
+			let addr = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
+			state.cpu_read_u8(addr);
+			CycleResult::NeedsMore
+		}
+		3 => {
+			state.registers.a = state.registers.take_mem();
+			state.registers.opcode_bytecount = Some(3);
+			CycleResult::Finished
+		}
+		_ => unreachable!(),
+	}
+}
+
+pub fn ld_deref_imm_u16_a(state: &mut Gameboy) -> CycleResult {
+	match state.registers.cycle {
+		0 => {
+			state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
+			CycleResult::NeedsMore
+		}
+		1 => {
+			let lsb = state.registers.take_mem() as u16;
+			state.cpu_read_u8(state.registers.pc.overflowing_add(2).0);
+			state.registers.set_hold(lsb);
+			CycleResult::NeedsMore
+		}
+		2 => {
+			let addr = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
+			state.cpu_write_u8(addr, state.registers.a);
+			state.registers.opcode_bytecount = Some(3);
+			CycleResult::NeedsMore
+		}
+		3 => CycleResult::Finished,
+		_ => unreachable!(),
+	}
+}
