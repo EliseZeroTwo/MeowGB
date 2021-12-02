@@ -17,15 +17,15 @@ pub fn jr_nz_i8(state: &mut Gameboy) -> CycleResult {
 			}
 		}
 		2 => {
-			let relative = state.registers.take_mem();
-			const TC_BITFLAG: u8 = 1 << 7;
-			if relative & TC_BITFLAG == 0 {
+			let relative = state.registers.take_mem() as i8;
+
+			if relative >= 0 {
 				state.registers.pc = state.registers.pc.overflowing_add(relative as u16).0;
 			} else {
-				state.registers.pc =
-					state.registers.pc.overflowing_sub((relative & !TC_BITFLAG) as u16).0;
+				state.registers.pc = state.registers.pc.overflowing_sub(relative.abs() as u16).0;
 			}
-			state.registers.opcode_bytecount = Some(0);
+
+			state.registers.opcode_bytecount = Some(2);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -56,7 +56,7 @@ pub fn jr_nc_i8(state: &mut Gameboy) -> CycleResult {
 				state.registers.pc =
 					state.registers.pc.overflowing_sub((relative & !TC_BITFLAG) as u16).0;
 			}
-			state.registers.opcode_bytecount = Some(0);
+			state.registers.opcode_bytecount = Some(2);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -87,7 +87,7 @@ pub fn jr_z_i8(state: &mut Gameboy) -> CycleResult {
 				state.registers.pc =
 					state.registers.pc.overflowing_sub((relative & !TC_BITFLAG) as u16).0;
 			}
-			state.registers.opcode_bytecount = Some(0);
+			state.registers.opcode_bytecount = Some(2);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -118,7 +118,7 @@ pub fn jr_c_i8(state: &mut Gameboy) -> CycleResult {
 				state.registers.pc =
 					state.registers.pc.overflowing_sub((relative & !TC_BITFLAG) as u16).0;
 			}
-			state.registers.opcode_bytecount = Some(0);
+			state.registers.opcode_bytecount = Some(2);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),
@@ -141,7 +141,7 @@ pub fn jr_i8(state: &mut Gameboy) -> CycleResult {
 				state.registers.pc =
 					state.registers.pc.overflowing_sub((relative & !TC_BITFLAG) as u16).0;
 			}
-			state.registers.opcode_bytecount = Some(0);
+			state.registers.opcode_bytecount = Some(2);
 			CycleResult::Finished
 		}
 		_ => unreachable!(),

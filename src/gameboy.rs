@@ -44,6 +44,9 @@ pub struct Gameboy {
 	pub joypad: Joypad,
 	pub dma: DmaState,
 	pub sound: Sound,
+
+	pub single_step: bool,
+	pub breakpoints: [bool; u16::MAX as usize],
 }
 
 impl Gameboy {
@@ -58,10 +61,79 @@ impl Gameboy {
 			ppu: Ppu::new(),
 			registers: Registers::default(),
 			sound: Sound::default(),
+			single_step: true,
+			breakpoints: [false; u16::MAX as usize],
+		}
+	}
+
+	fn log_next_opcode(&self) {
+		let op = self.internal_cpu_read_u8(self.registers.pc);
+		if op == 0xCB {
+			let op = self.internal_cpu_read_u8(self.registers.pc.overflowing_add(1).0);
+			log::info!("Next opcode (prefixed) (cycle {}): {:#X}", self.registers.cycle, op);
+		} else {
+			log::info!("Next opcode (cycle {}): {:#X}", self.registers.cycle, op);
 		}
 	}
 
 	pub fn tick(&mut self) -> bool {
+		if self.breakpoints[self.registers.pc as usize] {
+			self.single_step = true;
+			log::info!("Breakpoint hit @ {:#X}", self.registers.pc);
+		}
+
+		if self.single_step {
+			print!("> ");
+			let mut input = String::new();
+			let mut exit = true;
+			match std::io::stdin().read_line(&mut input) {
+				Ok(_) => {
+					let lower = input.trim_end().to_lowercase();
+					let (lhs, rhs) = lower.split_once(' ').unwrap_or_else(|| (lower.as_str(), ""));
+					match lhs {
+						"read" => match u16::from_str_radix(rhs, 16) {
+							Ok(address) => {
+								let res = self.internal_cpu_read_u8(address);
+								log::info!("{:#X}: {:#X} ({:#b})", address, res, res);
+							}
+							Err(_) => log::error!("Failed to parse input as hex u16 (f.ex 420C)"),
+						},
+						"regs" => {
+							log::info!("{:x?}", self.registers)
+						}
+						"op" => {
+							self.log_next_opcode();
+						}
+						"bp" => match u16::from_str_radix(rhs, 16) {
+							Ok(address) => {
+								let bp = &mut self.breakpoints[address as usize];
+								*bp = !*bp;
+								match *bp {
+									true => log::info!("Set breakpoint @ {:#X}", address),
+									false => log::info!("Cleared breakpoint @ {:#X}", address),
+								}
+							}
+							Err(_) => log::error!("Failed to parse input as hex u16 (f.ex 420C)"),
+						},
+						"c" => {
+							self.single_step = false;
+							log::info!("Continuing");
+							exit = false;
+						}
+						"s" | "step" => {
+							self.log_next_opcode();
+							exit = false;
+						}
+						_ => {}
+					}
+				}
+				Err(stdin_err) => panic!("Failed to lock stdin: {:?}", stdin_err),
+			}
+
+			if exit {
+				return false;
+			}
+		}
 		if self.timer.tick() {
 			self.interrupts.write_if_timer(true);
 		}
@@ -220,11 +292,8 @@ impl Gameboy {
 		}
 	}
 
-	pub fn cpu_read_u8(&mut self, address: u16) {
-		assert!(!self.registers.mem_op_happened);
-		assert!(self.registers.mem_read_hold.is_none());
-		self.registers.mem_op_happened = true;
-		self.registers.mem_read_hold = Some(if self.dma.remaining_cycles == 0 {
+	fn internal_cpu_read_u8(&self, address: u16) -> u8 {
+		if self.dma.remaining_cycles == 0 {
 			match address {
 				0..=0xFF if !self.memory.bootrom_disabled => self.memory.bootrom[address as usize],
 				0..=0x7FFF => match self.cartridge.as_ref() {
@@ -251,7 +320,14 @@ impl Gameboy {
 				0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80],
 				0xFFFF => self.interrupts.interrupt_enable,
 			}
-		})
+		}
+	}
+
+	pub fn cpu_read_u8(&mut self, address: u16) {
+		assert!(!self.registers.mem_op_happened);
+		assert!(self.registers.mem_read_hold.is_none());
+		self.registers.mem_op_happened = true;
+		self.registers.mem_read_hold = Some(self.internal_cpu_read_u8(address));
 	}
 
 	pub fn cpu_write_u8(&mut self, address: u16, value: u8) {

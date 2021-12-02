@@ -48,8 +48,8 @@ pub fn add(lhs: u8, rhs: u8) -> CarryResult {
 }
 
 pub fn sub(lhs: u8, rhs: u8) -> CarryResult {
-	let (result, carry) = lhs.overflowing_add(rhs);
-	let (_, half_carry) = (lhs & 0xF).overflowing_add(rhs & 0xF);
+	let (result, carry) = lhs.overflowing_sub(rhs);
+	let (_, half_carry) = (lhs & 0xF).overflowing_sub(rhs & 0xF);
 
 	CarryResult { result, carry, half_carry }
 }
@@ -288,6 +288,7 @@ macro_rules! define_inc_reg {
 							1,
 						);
 
+						state.registers.$reg = result;
 						state.registers.set_zero(result == 0);
 						state.registers.set_subtract(false);
 						state.registers.set_half_carry(half_carry);
@@ -318,6 +319,7 @@ pub fn inc_deref_hl(state: &mut Gameboy) -> CycleResult {
 		1 => {
 			let CarryResult { result, half_carry, .. } = add(state.registers.take_mem(), 1);
 
+			state.cpu_write_u8(state.registers.get_hl(), result);
 			state.registers.set_zero(result == 0);
 			state.registers.set_subtract(false);
 			state.registers.set_half_carry(half_carry);
@@ -340,6 +342,7 @@ macro_rules! define_dec_reg {
 							1,
 						);
 
+						state.registers.$reg = result;
 						state.registers.set_zero(result == 0);
 						state.registers.set_subtract(false);
 						state.registers.set_half_carry(half_carry);
@@ -370,6 +373,7 @@ pub fn dec_deref_hl(state: &mut Gameboy) -> CycleResult {
 		1 => {
 			let CarryResult { result, half_carry, .. } = sub(state.registers.take_mem(), 1);
 
+			state.cpu_write_u8(state.registers.get_hl(), result);
 			state.registers.set_zero(result == 0);
 			state.registers.set_subtract(false);
 			state.registers.set_half_carry(half_carry);
