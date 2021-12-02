@@ -426,7 +426,7 @@ macro_rules! define_push_pop_reg {
 					_ => unreachable!(),
 				}
 			}
-			
+
 			pub fn [<pop_ $reg>](state: &mut Gameboy) -> CycleResult {
 				match state.registers.cycle {
 					0 => {

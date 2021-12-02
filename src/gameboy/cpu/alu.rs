@@ -75,29 +75,6 @@ macro_rules! define_xor_reg {
 	};
 }
 
-macro_rules! define_sbc_reg {
-    ($reg:ident) => {
-        paste::paste! {
-            pub fn [<sbc_a_ $reg>](state: &mut Gameboy) -> CycleResult {
-                match state.registers.cycle {
-                    0 => {
-                        let CarryResult { result, half_carry, carry } = sub_with_carry(state.registers.a, state.registers.$reg, state.registers.get_carry());
-
-                        state.registers.a = result;
-                        state.registers.set_zero(result == 0);
-                        state.registers.set_subtract(true);
-                        state.registers.set_half_carry(half_carry);
-                        state.registers.set_carry(carry);
-                        state.registers.opcode_bytecount = Some(1);
-                        CycleResult::Finished
-                    },
-                    _ => unreachable!(),
-                }
-            }
-        }
-    };
-}
-
 define_xor_reg!(a);
 define_xor_reg!(b);
 define_xor_reg!(c);
@@ -142,6 +119,29 @@ pub fn xor_a_imm_u8(state: &mut Gameboy) -> CycleResult {
 		}
 		_ => unreachable!(),
 	}
+}
+
+macro_rules! define_sbc_reg {
+    ($reg:ident) => {
+        paste::paste! {
+            pub fn [<sbc_a_ $reg>](state: &mut Gameboy) -> CycleResult {
+                match state.registers.cycle {
+                    0 => {
+                        let CarryResult { result, half_carry, carry } = sub_with_carry(state.registers.a, state.registers.$reg, state.registers.get_carry());
+
+                        state.registers.a = result;
+                        state.registers.set_zero(result == 0);
+                        state.registers.set_subtract(true);
+                        state.registers.set_half_carry(half_carry);
+                        state.registers.set_carry(carry);
+                        state.registers.opcode_bytecount = Some(1);
+                        CycleResult::Finished
+                    },
+                    _ => unreachable!(),
+                }
+            }
+        }
+    };
 }
 
 define_sbc_reg!(a);
@@ -189,6 +189,81 @@ pub fn sbc_a_imm_u8(state: &mut Gameboy) -> CycleResult {
 				state.registers.take_mem(),
 				state.registers.get_carry(),
 			);
+
+			state.registers.a = result;
+			state.registers.set_zero(result == 0);
+			state.registers.set_subtract(true);
+			state.registers.set_half_carry(half_carry);
+			state.registers.set_carry(carry);
+			state.registers.opcode_bytecount = Some(1);
+			CycleResult::Finished
+		}
+		_ => unreachable!(),
+	}
+}
+
+macro_rules! define_sub_reg {
+    ($reg:ident) => {
+        paste::paste! {
+            pub fn [<sub_a_ $reg>](state: &mut Gameboy) -> CycleResult {
+                match state.registers.cycle {
+                    0 => {
+                        let CarryResult { result, half_carry, carry } = sub(state.registers.a, state.registers.$reg);
+
+                        state.registers.a = result;
+                        state.registers.set_zero(result == 0);
+                        state.registers.set_subtract(true);
+                        state.registers.set_half_carry(half_carry);
+                        state.registers.set_carry(carry);
+                        state.registers.opcode_bytecount = Some(1);
+                        CycleResult::Finished
+                    },
+                    _ => unreachable!(),
+                }
+            }
+        }
+    };
+}
+
+define_sub_reg!(a);
+define_sub_reg!(b);
+define_sub_reg!(c);
+define_sub_reg!(d);
+define_sub_reg!(e);
+define_sub_reg!(h);
+define_sub_reg!(l);
+
+pub fn sub_a_deref_hl(state: &mut Gameboy) -> CycleResult {
+	match state.registers.cycle {
+		0 => {
+			state.cpu_read_u8(state.registers.get_hl());
+			CycleResult::NeedsMore
+		}
+		1 => {
+			let CarryResult { result, half_carry, carry } =
+				sub(state.registers.a, state.registers.take_mem());
+
+			state.registers.a = result;
+			state.registers.set_zero(result == 0);
+			state.registers.set_subtract(true);
+			state.registers.set_half_carry(half_carry);
+			state.registers.set_carry(carry);
+			state.registers.opcode_bytecount = Some(1);
+			CycleResult::Finished
+		}
+		_ => unreachable!(),
+	}
+}
+
+pub fn sub_a_imm_u8(state: &mut Gameboy) -> CycleResult {
+	match state.registers.cycle {
+		0 => {
+			state.cpu_read_u8(state.registers.pc + 1);
+			CycleResult::NeedsMore
+		}
+		1 => {
+			let CarryResult { result, half_carry, carry } =
+				sub(state.registers.a, state.registers.take_mem());
 
 			state.registers.a = result;
 			state.registers.set_zero(result == 0);
@@ -303,5 +378,27 @@ pub fn dec_deref_hl(state: &mut Gameboy) -> CycleResult {
 		}
 		2 => CycleResult::Finished,
 		_ => unimplemented!(),
+	}
+}
+
+pub fn rla(state: &mut Gameboy) -> CycleResult {
+	match state.registers.cycle {
+		0 => {
+			let carry = state.registers.a >> 7 == 1;
+			state.registers.a <<= 1;
+
+			if state.registers.get_carry() {
+				state.registers.a |= 1;
+			}
+
+			state.registers.set_zero(false);
+			state.registers.set_subtract(false);
+			state.registers.set_half_carry(false);
+			state.registers.set_carry(carry);
+
+			state.registers.opcode_bytecount = Some(1);
+			CycleResult::Finished
+		}
+		_ => unreachable!(),
 	}
 }

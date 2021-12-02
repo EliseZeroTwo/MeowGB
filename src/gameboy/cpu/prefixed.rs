@@ -17,6 +17,13 @@ pub fn prefixed_handler(state: &mut Gameboy) -> CycleResult {
 	};
 
 	let res: CycleResult = match opcode {
+		0x10 => rl_b,
+		0x11 => rl_c,
+		0x12 => rl_d,
+		0x13 => rl_e,
+		0x14 => rl_h,
+		0x15 => rl_l,
+		0x17 => rl_a,
 		0x40 => bit_0_b,
 		0x41 => bit_0_c,
 		0x42 => bit_0_d,
@@ -162,3 +169,33 @@ define_bit_deref_hl!(4);
 define_bit_deref_hl!(5);
 define_bit_deref_hl!(6);
 define_bit_deref_hl!(7);
+
+macro_rules! define_rl_reg {
+	($reg:ident) => {
+		paste::paste! {
+			pub fn [<rl_ $reg>](state: &mut Gameboy) -> CycleResult {
+				match state.registers.cycle {
+					1 => {
+						let (res, carry) = state.registers.$reg.overflowing_shl(1);
+						state.registers.$reg = res;
+						state.registers.set_zero(res == 0);
+						state.registers.set_subtract(false);
+						state.registers.set_half_carry(false);
+						state.registers.set_carry(carry);
+						state.registers.opcode_bytecount = Some(2);
+						CycleResult::Finished
+					},
+					_ => unreachable!(),
+				}
+			}
+		}
+	};
+}
+
+define_rl_reg!(b);
+define_rl_reg!(c);
+define_rl_reg!(d);
+define_rl_reg!(e);
+define_rl_reg!(h);
+define_rl_reg!(l);
+define_rl_reg!(a);
