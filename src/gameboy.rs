@@ -14,7 +14,7 @@ use memory::Memory;
 use ppu::Ppu;
 use timer::Timer;
 
-use self::{cpu::Registers, sound::Sound};
+use self::{cpu::Registers, mapper::NoMBC, sound::Sound};
 
 pub struct DmaState {
 	pub base: u8,
@@ -61,7 +61,7 @@ impl Gameboy {
 			ppu: Ppu::new(),
 			registers: Registers::default(),
 			sound: Sound::default(),
-			single_step: true,
+			single_step: false,
 			breakpoints: [false; u16::MAX as usize],
 		}
 	}
@@ -70,9 +70,26 @@ impl Gameboy {
 		let op = self.internal_cpu_read_u8(self.registers.pc);
 		if op == 0xCB {
 			let op = self.internal_cpu_read_u8(self.registers.pc.overflowing_add(1).0);
-			log::info!("Next opcode (prefixed) (cycle {}): {:#X}", self.registers.cycle, op);
+			log::info!(
+				"Next opcode @ {:#X} (prefixed) (cycle {}): {:#X}",
+				self.registers.pc,
+				self.registers.cycle,
+				op
+			);
 		} else {
-			log::info!("Next opcode (cycle {}): {:#X}", self.registers.cycle, op);
+			log::info!(
+				"Next opcode @ {:#X} (cycle {}): {:#X}",
+				self.registers.pc,
+				self.registers.cycle,
+				op
+			);
+		}
+	}
+
+	pub fn load_cartridge(&mut self, bytes: Vec<u8>) {
+		match bytes[0x147] {
+			0 => self.cartridge = Some(Box::new(NoMBC::new(bytes))),
+			other => unimplemented!("Cartidge type: {:#X}", other),
 		}
 	}
 

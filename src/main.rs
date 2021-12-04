@@ -84,6 +84,17 @@ pub fn run_gameboy(
 	}
 
 	let mut gameboy = Gameboy::new(bootrom.as_slice().try_into().unwrap());
+
+	if let Some(rom) = args.rom {
+		if !rom.is_file() {
+			return Err(DmgError::GameNotFound);
+		}
+
+		let rom = std::fs::read(rom.as_path())?;
+
+		gameboy.load_cartridge(rom)
+	}
+
 	let mut last = chrono::Local::now();
 	let mut paused = false;
 	let mut frame_counter = 0;
@@ -112,6 +123,7 @@ pub fn run_gameboy(
 				if frame_counter == 60 {
 					let now = chrono::Local::now();
 					log::info!("Rendered 60 frames in {}", now - last);
+					std::thread::sleep(std::time::Duration::from_millis(900));
 					last = now;
 					frame_counter = 0;
 
