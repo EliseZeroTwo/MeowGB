@@ -22,7 +22,7 @@ pub struct Interrupts {
 
 impl Interrupts {
 	pub fn new() -> Self {
-		Self { ime: true, interrupt_enable: 0b1_1111, interrupt_flag: 0b0_0000 }
+		Self { ime: false, interrupt_enable: 0, interrupt_flag: 0 }
 	}
 
 	define_bitfield_u8_gs!(ie_vblank, 0, interrupt_enable);

@@ -8,6 +8,7 @@ use std::{
 };
 
 use argh::FromArgs;
+use chrono::Duration;
 use gameboy::Gameboy;
 use settings::DeemgeeConfig;
 use window::WindowEvent;
@@ -95,7 +96,7 @@ pub fn run_gameboy(
 		gameboy.load_cartridge(rom)
 	}
 
-	let mut last = chrono::Local::now();
+	let mut goal = chrono::Utc::now() + Duration::milliseconds(1000 / 60);
 	let mut paused = false;
 	let mut frame_counter = 0;
 
@@ -118,16 +119,19 @@ pub fn run_gameboy(
 		if !paused {
 			let redraw_needed = gameboy.tick();
 			if redraw_needed {
+				let now = chrono::Utc::now();
 				frame_counter += 1;
+				tx.send(GameboyEvent::Framebuffer(gameboy.ppu.write_fb())).unwrap();
+				let delta = goal - now;
+				let delta_ms = delta.num_milliseconds();
+				if delta_ms > 0 {
+					std::thread::sleep(std::time::Duration::from_millis(delta_ms as u64));
+				}
+				goal = goal + Duration::milliseconds(1000 / 60);
 
 				if frame_counter == 60 {
-					let now = chrono::Local::now();
-					log::info!("Rendered 60 frames in {}", now - last);
-					std::thread::sleep(std::time::Duration::from_millis(900));
-					last = now;
+					log::info!("Rendered 60 frames");
 					frame_counter = 0;
-
-					tx.send(GameboyEvent::Framebuffer(gameboy.ppu.write_fb())).unwrap();
 				}
 			}
 		}

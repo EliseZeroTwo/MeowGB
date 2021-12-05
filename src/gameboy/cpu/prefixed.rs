@@ -176,9 +176,14 @@ macro_rules! define_rl_reg {
 			pub fn [<rl_ $reg>](state: &mut Gameboy) -> CycleResult {
 				match state.registers.cycle {
 					1 => {
-						let (res, carry) = state.registers.$reg.overflowing_shl(1);
-						state.registers.$reg = res;
-						state.registers.set_zero(res == 0);
+						let carry = state.registers.$reg >> 7 == 1;
+						state.registers.$reg <<= 1;
+
+						if state.registers.get_carry() {
+							state.registers.$reg |= 1;
+						}
+
+						state.registers.set_zero(state.registers.$reg == 0);
 						state.registers.set_subtract(false);
 						state.registers.set_half_carry(false);
 						state.registers.set_carry(carry);

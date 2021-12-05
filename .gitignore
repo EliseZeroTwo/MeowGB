@@ -1,4 +1,6 @@
 /target
 /roms/
+/bmp/
 config.toml
 /.vscode/
+out

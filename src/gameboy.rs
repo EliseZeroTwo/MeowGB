@@ -47,6 +47,9 @@ pub struct Gameboy {
 
 	pub single_step: bool,
 	pub breakpoints: [bool; u16::MAX as usize],
+	pub mem_read_breakpoints: [bool; u16::MAX as usize],
+	pub mem_write_breakpoints: [bool; u16::MAX as usize],
+	trigger_bp: bool,
 }
 
 impl Gameboy {
@@ -63,6 +66,9 @@ impl Gameboy {
 			sound: Sound::default(),
 			single_step: false,
 			breakpoints: [false; u16::MAX as usize],
+			mem_read_breakpoints: [false; u16::MAX as usize],
+			mem_write_breakpoints: [false; u16::MAX as usize],
+			trigger_bp: false,
 		}
 	}
 
@@ -71,14 +77,14 @@ impl Gameboy {
 		if op == 0xCB {
 			let op = self.internal_cpu_read_u8(self.registers.pc.overflowing_add(1).0);
 			log::info!(
-				"Next opcode @ {:#X} (prefixed) (cycle {}): {:#X}",
+				"Executing opcode @ {:#X} (prefixed) (cycle {}): {:#X}",
 				self.registers.pc,
 				self.registers.cycle,
 				op
 			);
 		} else {
 			log::info!(
-				"Next opcode @ {:#X} (cycle {}): {:#X}",
+				"Executing opcode @ {:#X} (cycle {}): {:#X}",
 				self.registers.pc,
 				self.registers.cycle,
 				op
@@ -93,14 +99,19 @@ impl Gameboy {
 		}
 	}
 
+	fn log_state(&self) {
+		log::info!("-- Registers --\nAF: {:04X}\nBC: {:04X}\nDE: {:04X}\nHL: {:04X}\nSP: {:04X}\nPC: {:04X}\nZero: {}\nSubtract: {}\nHalf-Carry: {}\nCarry: {}", self.registers.get_af(), self.registers.get_bc(), self.registers.get_de(), self.registers.get_hl(), self.registers.get_sp(), self.registers.pc, self.registers.get_zero(), self.registers.get_subtract(), self.registers.get_half_carry(), self.registers.get_carry());
+	}
+
 	pub fn tick(&mut self) -> bool {
-		if self.breakpoints[self.registers.pc as usize] {
+		if self.breakpoints[self.registers.pc as usize] && !self.single_step {
 			self.single_step = true;
 			log::info!("Breakpoint hit @ {:#X}", self.registers.pc);
 		}
 
-		if self.single_step {
-			print!("> ");
+		if self.trigger_bp || (self.single_step && self.registers.cycle == 0) {
+			self.trigger_bp = false;
+			self.single_step = true;
 			let mut input = String::new();
 			let mut exit = true;
 			match std::io::stdin().read_line(&mut input) {
@@ -115,9 +126,7 @@ impl Gameboy {
 							}
 							Err(_) => log::error!("Failed to parse input as hex u16 (f.ex 420C)"),
 						},
-						"regs" => {
-							log::info!("{:x?}", self.registers)
-						}
+						"regs" => self.log_state(),
 						"op" => {
 							self.log_next_opcode();
 						}
@@ -132,6 +141,32 @@ impl Gameboy {
 							}
 							Err(_) => log::error!("Failed to parse input as hex u16 (f.ex 420C)"),
 						},
+						"bpr" => match u16::from_str_radix(rhs, 16) {
+							Ok(address) => {
+								let bp = &mut self.mem_read_breakpoints[address as usize];
+								*bp = !*bp;
+								match *bp {
+									true => log::info!("Set breakpoint on read @ {:#X}", address),
+									false => {
+										log::info!("Cleared breakpoint on read @ {:#X}", address)
+									}
+								}
+							}
+							Err(_) => log::error!("Failed to parse input as hex u16 (f.ex 420C)"),
+						},
+						"bpw" => match u16::from_str_radix(rhs, 16) {
+							Ok(address) => {
+								let bp = &mut self.mem_write_breakpoints[address as usize];
+								*bp = !*bp;
+								match *bp {
+									true => log::info!("Set breakpoint on write @ {:#X}", address),
+									false => {
+										log::info!("Cleared breakpoint on write @ {:#X}", address)
+									}
+								}
+							}
+							Err(_) => log::error!("Failed to parse input as hex u16 (f.ex 420C)"),
+						},
 						"c" => {
 							self.single_step = false;
 							log::info!("Continuing");
@@ -140,6 +175,43 @@ impl Gameboy {
 						"s" | "step" => {
 							self.log_next_opcode();
 							exit = false;
+						}
+						"ls" => {
+							self.log_state();
+							exit = false;
+						}
+						"dumpbgtiles" => {
+							self.ppu.dump_bg_tiles();
+						}
+						"dumpfb" => {
+							println!("Written to: {}", self.ppu.dump_fb());
+						}
+						"dumpvram" => {
+							for x in 0..0x200 {
+								if x % 0x10 == 0 {
+									print!("\n{:X}: ", 0x8000 + x)
+								}
+
+								let mem_val = self.ppu.vram[x];
+								print!("{:02X} ", mem_val);
+							}
+							println!();
+						}
+						"dumptilemap" => {
+							let base = match (self.ppu.lcdc >> 3) & 0b1 == 1 {
+								true => 0x1C00,
+								false => 0x1800,
+							};
+
+							for x in 0..0x400 {
+								if x % 0x10 == 0 {
+									print!("\n{:X}: ", 0x8000 + base + x)
+								}
+
+								let mem_val = self.ppu.vram[base + x];
+								print!("{:02X} ", mem_val);
+							}
+							println!();
 						}
 						_ => {}
 					}
@@ -344,12 +416,24 @@ impl Gameboy {
 		assert!(!self.registers.mem_op_happened);
 		assert!(self.registers.mem_read_hold.is_none());
 		self.registers.mem_op_happened = true;
+
+		if self.mem_read_breakpoints[address as usize] {
+			self.trigger_bp = true;
+			log::info!("Triggered read bp @ {:#X}", address);
+		}
+
 		self.registers.mem_read_hold = Some(self.internal_cpu_read_u8(address));
 	}
 
 	pub fn cpu_write_u8(&mut self, address: u16, value: u8) {
 		assert!(!self.registers.mem_op_happened);
 		self.registers.mem_op_happened = true;
+
+		if self.mem_write_breakpoints[address as usize] {
+			self.trigger_bp = true;
+			log::info!("Triggered write bp @ {:#X} (value: {:#02X})", address, value);
+		}
+
 		if self.dma.remaining_cycles == 0 {
 			match address {
 				0..=0xFF if !self.memory.bootrom_disabled => {}

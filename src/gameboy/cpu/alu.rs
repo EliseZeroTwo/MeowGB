@@ -16,8 +16,9 @@ pub fn sub_with_carry(lhs: u8, rhs: u8, carry: bool) -> CarryResult {
 
 	let carry = first_carry || second_carry;
 
-	let (first_hc_res, first_half_carry) = (lhs & 0xF).overflowing_sub(rhs & 0xF);
-	let (_, second_half_carry) = first_hc_res.overflowing_sub(carry_u8);
+	let first_hc_res = (lhs & 0xF).overflowing_sub(rhs & 0xF).0;
+	let first_half_carry = (first_hc_res >> 4) & 0b1 == 1;
+	let second_half_carry = ((first_hc_res.overflowing_sub(carry_u8).0) >> 4) & 0b1 == 1;
 
 	let half_carry = first_half_carry || second_half_carry;
 
@@ -32,8 +33,9 @@ pub fn add_with_carry(lhs: u8, rhs: u8, carry: bool) -> CarryResult {
 
 	let carry = first_carry || second_carry;
 
-	let (first_hc_res, first_half_carry) = (lhs & 0xF).overflowing_add(rhs & 0xF);
-	let (_, second_half_carry) = first_hc_res.overflowing_add(carry_u8);
+	let first_hc_res = (lhs & 0xF) + (rhs & 0xF);
+	let first_half_carry = (first_hc_res >> 4) & 0b1 == 1;
+	let second_half_carry = ((first_hc_res + carry_u8) >> 4) & 0b1 == 1;
 
 	let half_carry = first_half_carry || second_half_carry;
 
@@ -42,14 +44,14 @@ pub fn add_with_carry(lhs: u8, rhs: u8, carry: bool) -> CarryResult {
 
 pub fn add(lhs: u8, rhs: u8) -> CarryResult {
 	let (result, carry) = lhs.overflowing_add(rhs);
-	let (_, half_carry) = (lhs & 0xF).overflowing_add(rhs & 0xF);
+	let half_carry = (((lhs & 0xF) + (rhs & 0xF)) >> 4) & 0b1 == 1;
 
 	CarryResult { result, carry, half_carry }
 }
 
 pub fn sub(lhs: u8, rhs: u8) -> CarryResult {
 	let (result, carry) = lhs.overflowing_sub(rhs);
-	let (_, half_carry) = (lhs & 0xF).overflowing_sub(rhs & 0xF);
+	let half_carry = (((lhs & 0xF).overflowing_sub(rhs & 0xF).0) >> 4) & 0b1 == 1;
 
 	CarryResult { result, carry, half_carry }
 }
@@ -500,7 +502,7 @@ macro_rules! define_dec_reg {
 
 						state.registers.$reg = result;
 						state.registers.set_zero(result == 0);
-						state.registers.set_subtract(false);
+						state.registers.set_subtract(true);
 						state.registers.set_half_carry(half_carry);
 						state.registers.opcode_bytecount = Some(1);
 						CycleResult::Finished
@@ -548,7 +550,7 @@ pub fn rla(state: &mut Gameboy) -> CycleResult {
 			state.registers.a <<= 1;
 
 			if state.registers.get_carry() {
-				state.registers.a |= 1;
+				state.registers.a = state.registers.a.wrapping_add(1);
 			}
 
 			state.registers.set_zero(false);

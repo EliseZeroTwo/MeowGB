@@ -24,7 +24,7 @@ macro_rules! define_flag {
 	($flag:ident, $bit:literal) => {
 		paste::paste! {
 			pub fn [<get_ $flag>](&self) -> bool {
-				self.f >> $bit == 1
+				(self.f >> $bit) & 0b1 == 1
 			}
 
 			pub fn [<set_ $flag>](&mut self, value: bool) {

@@ -1,6 +1,11 @@
 use std::ops::{Index, IndexMut};
 
-use crate::{gameboy::Interrupts, window::FB_WIDTH};
+use bmp::{Image, Pixel};
+
+use crate::{
+	gameboy::Interrupts,
+	window::{FB_HEIGHT, FB_WIDTH},
+};
 
 pub struct WrappedBuffer<const SIZE: usize>([u8; SIZE]);
 
@@ -26,9 +31,13 @@ impl<const SIZE: usize> WrappedBuffer<SIZE> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PPUMode {
+	/// Mode 0
 	HBlank,
+	/// Mode 1
 	VBlank,
+	/// Mode 2
 	SearchingOAM,
+	/// Mode 3
 	TransferringData,
 }
 
@@ -52,7 +61,8 @@ impl Color {
 		}
 	}
 
-	pub fn parse_bgp_color(color: u8) -> Self {
+	pub fn parse_bgp_color(low: u8, high: u8) -> Self {
+		let color = ((high & 0b1) << 1) | low & 0b1;
 		match color & 0b11 {
 			0 => Self::White,
 			1 => Self::LGray,
@@ -62,7 +72,8 @@ impl Color {
 		}
 	}
 
-	pub fn parse_obp_color(color: u8) -> Self {
+	pub fn parse_obp_color(low: u8, high: u8) -> Self {
+		let color = ((high & 0b1) << 1) | low & 0b1;
 		match color & 0b11 {
 			0 => Self::Transparent,
 			1 => Self::LGray,
@@ -72,21 +83,12 @@ impl Color {
 		}
 	}
 
-	pub fn parse_bgp(mut bgp: u8) -> [Self; 4] {
-		let mut out = [Self::White, Self::White, Self::White, Self::White];
+	pub fn parse_bgp(mut bgp_low: u8, mut bgp_high: u8) -> [Self; 8] {
+		let mut out = [Self::White; 8];
 		for color in &mut out {
-			*color = Self::parse_bgp_color(bgp);
-			bgp >>= 2;
-		}
-		out.reverse();
-		out
-	}
-
-	pub fn parse_obp(mut obp: u8) -> [Self; 4] {
-		let mut out = [Self::Transparent, Self::Transparent, Self::Transparent, Self::Transparent];
-		for color in &mut out {
-			*color = Self::parse_obp_color(obp);
-			obp >>= 2;
+			*color = Self::parse_bgp_color(bgp_low, bgp_high);
+			bgp_low >>= 1;
+			bgp_high >>= 1;
 		}
 		out.reverse();
 		out
@@ -184,6 +186,65 @@ impl Ppu {
 		}
 	}
 
+	pub fn dump_fb(&self) -> String {
+		let mut image = Image::new(FB_WIDTH, FB_HEIGHT);
+
+		for y in 0..FB_HEIGHT {
+			for x in 0..FB_WIDTH {
+				let base = ((y as usize * FB_WIDTH as usize) + x as usize) * 4;
+				image.set_pixel(
+					x,
+					y,
+					Pixel::new(
+						self.framebuffer[base],
+						self.framebuffer[base + 1],
+						self.framebuffer[base + 2],
+					),
+				);
+			}
+		}
+
+		let now = chrono::Utc::now();
+		std::fs::create_dir_all("./bmp").unwrap();
+		let file_name = format!("./bmp/fb-{}.bmp", now.timestamp());
+		image.save(file_name.as_str()).unwrap();
+		file_name
+	}
+
+	pub fn dump_bg_tiles(&self) {
+		let mut image = Image::new(16 * 8, 16 * 9);
+
+		for tile_y in 0..16 {
+			for tile_x in 0..16 {
+				let tiledata = self.read_bg_win_tile(tile_y * 16 + tile_x);
+				for row in 0..8usize {
+					let base = row * 2;
+
+					let pixels = Color::parse_bgp(tiledata[base], tiledata[base + 1]);
+
+					for (x, color) in pixels.iter().enumerate() {
+						let pixel = color.rgba();
+						image.set_pixel(
+							(tile_x as u32 * 8) + x as u32,
+							tile_y as u32 * 9 + row as u32,
+							Pixel::new(pixel[0], pixel[1], pixel[2]),
+						);
+					}
+				}
+
+				for x in 0..8 {
+					let color = Pixel::new(255 / (x + 1), 255 / (x + 1), 255 / (x + 1));
+					image.set_pixel((tile_x as u32 * 8) + x as u32, 9 * tile_y as u32, color);
+				}
+			}
+		}
+
+		let now = chrono::Utc::now();
+		std::fs::create_dir_all("./bmp").unwrap();
+		let file_name = format!("./bmp/bg-data-{}.bmp", now.timestamp());
+		image.save(file_name.as_str()).unwrap();
+	}
+
 	fn set_scanline(&mut self, interrupts: &mut Interrupts, scanline: u8) {
 		self.ly = scanline;
 
@@ -212,9 +273,7 @@ impl Ppu {
 				scrolled_x % 8,
 				scrolled_y % 8,
 			);
-			let dest_idx_base = (((self.ly as usize + self.scy as usize) * FB_WIDTH as usize)
-				+ pixel_idx as usize)
-				* 4;
+			let dest_idx_base = ((self.ly as usize * FB_WIDTH as usize) + pixel_idx as usize) * 4;
 			for (idx, byte) in color.rgba().iter().enumerate() {
 				self.framebuffer[dest_idx_base + idx] = *byte;
 			}
@@ -271,7 +330,7 @@ impl Ppu {
 
 					let tile_x_idx = if entry.x_flip() { 8 - x } else { x };
 
-					let color = Self::parse_tile_color(
+					let color = Self::parse_sprite_tile_color(
 						self.read_obj_tile(tile_idx),
 						tile_x_idx as usize,
 						tile_y_idx as usize,
@@ -312,16 +371,18 @@ impl Ppu {
 		}
 	}
 
+	fn parse_sprite_tile_color(tile: &[u8], x: usize, y: usize) -> Color {
+		assert!(x < 8);
+		assert!(y < 8);
+		let bitshift = 7 - x;
+		Color::parse_obp_color(tile[y * 2] >> bitshift, tile[(y * 2) + 1] >> bitshift)
+	}
+
 	fn parse_tile_color(tile: &[u8], x: usize, y: usize) -> Color {
 		assert!(x < 8);
-		if x < 4 {
-			let bitshift = 6 - x * 2;
-			Color::parse_bgp_color(tile[y * 2] >> bitshift)
-		} else {
-			let x = x - 4;
-			let bitshift = 6 - x * 2;
-			Color::parse_bgp_color(tile[(y * 2) + 1] >> bitshift)
-		}
+		assert!(y < 8);
+		let bitshift = 7 - x;
+		Color::parse_bgp_color(tile[y * 2] >> bitshift, tile[(y * 2) + 1] >> bitshift)
 	}
 
 	fn set_mode(&mut self, interrupts: &mut Interrupts, mode: PPUMode) {
@@ -370,10 +431,11 @@ impl Ppu {
 		out
 	}
 
+	/// One line should be 456 ticks (but we effectively emulate 228 ticks)
 	pub fn tick(&mut self, interrupts: &mut Interrupts) -> bool {
 		let res = match self.mode() {
 			PPUMode::HBlank => {
-				if self.cycle_counter >= 120 {
+				if self.cycle_counter == (102 / 2) {
 					self.set_scanline(interrupts, self.ly + 1);
 
 					let next_mode = match self.ly > 143 {
@@ -385,7 +447,7 @@ impl Ppu {
 				false
 			}
 			PPUMode::VBlank => {
-				if self.cycle_counter % 506 == 0 {
+				if self.cycle_counter % (228 / 2) == 0 {
 					if self.ly >= 153 {
 						self.set_scanline(interrupts, 0);
 						self.set_mode(interrupts, PPUMode::SearchingOAM);
@@ -399,13 +461,13 @@ impl Ppu {
 				}
 			}
 			PPUMode::SearchingOAM => {
-				if self.cycle_counter >= 80 {
+				if self.cycle_counter == (40 / 2) {
 					self.set_mode(interrupts, PPUMode::TransferringData);
 				}
 				false
 			}
 			PPUMode::TransferringData => {
-				if self.cycle_counter >= 170 {
+				if self.cycle_counter == (86 / 2) {
 					self.draw_line();
 					self.set_mode(interrupts, PPUMode::HBlank);
 				}
@@ -425,8 +487,11 @@ impl Ppu {
 	pub fn cpu_read_oam(&self, address: u16) -> u8 {
 		let decoded_address = address - 0xFE00;
 		match self.mode() {
-			PPUMode::HBlank | PPUMode::VBlank => self.oam[decoded_address as usize],
-			PPUMode::SearchingOAM | PPUMode::TransferringData => 0xFF,
+			PPUMode::SearchingOAM
+			| PPUMode::TransferringData
+			| PPUMode::HBlank
+			| PPUMode::VBlank => self.oam[decoded_address as usize],
+			//_ => 0xFF,
 		}
 	}
 
@@ -437,8 +502,11 @@ impl Ppu {
 	pub fn cpu_write_oam(&mut self, address: u16, value: u8) {
 		let decoded_address = address - 0xFE00;
 		match self.mode() {
-			PPUMode::HBlank | PPUMode::VBlank => self.oam[decoded_address as usize] = value,
-			_ => {}
+			PPUMode::SearchingOAM
+			| PPUMode::TransferringData
+			| PPUMode::HBlank
+			| PPUMode::VBlank => self.oam[decoded_address as usize] = value,
+			// _ => {}
 		}
 	}
 
@@ -449,20 +517,20 @@ impl Ppu {
 	pub fn cpu_read_vram(&self, address: u16) -> u8 {
 		let decoded_address = address - 0x8000;
 		match self.mode() {
-			PPUMode::HBlank | PPUMode::VBlank | PPUMode::SearchingOAM => {
-				self.vram[decoded_address as usize]
-			}
-			PPUMode::TransferringData => 0xFF,
+			PPUMode::TransferringData
+			| PPUMode::HBlank
+			| PPUMode::VBlank
+			| PPUMode::SearchingOAM => self.vram[decoded_address as usize], /* PPUMode::TransferringData => 0xFF, */
 		}
 	}
 
 	pub fn cpu_write_vram(&mut self, address: u16, value: u8) {
 		let decoded_address = address - 0x8000;
 		match self.mode() {
-			PPUMode::HBlank | PPUMode::VBlank | PPUMode::SearchingOAM => {
-				self.vram[decoded_address as usize] = value
-			}
-			_ => {}
+			PPUMode::TransferringData
+			| PPUMode::HBlank
+			| PPUMode::VBlank
+			| PPUMode::SearchingOAM => self.vram[decoded_address as usize] = value, //_ => {}
 		}
 	}
 
