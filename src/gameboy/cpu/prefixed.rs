@@ -24,6 +24,13 @@ pub fn prefixed_handler(state: &mut Gameboy) -> CycleResult {
 		0x14 => rl_h,
 		0x15 => rl_l,
 		0x17 => rl_a,
+		0x30 => swap_b,
+		0x31 => swap_c,
+		0x32 => swap_d,
+		0x33 => swap_e,
+		0x34 => swap_h,
+		0x35 => swap_l,
+		0x37 => swap_a,
 		0x40 => bit_0_b,
 		0x41 => bit_0_c,
 		0x42 => bit_0_d,
@@ -204,3 +211,33 @@ define_rl_reg!(e);
 define_rl_reg!(h);
 define_rl_reg!(l);
 define_rl_reg!(a);
+
+macro_rules! define_swap_reg {
+	($reg:ident) => {
+		paste::paste! {
+			pub fn [<swap_ $reg>](state: &mut Gameboy) -> CycleResult {
+				match state.registers.cycle {
+					1 => {
+						state.registers.$reg = (state.registers.$reg >> 4) | (state.registers.$reg << 4);
+
+						state.registers.set_zero(state.registers.$reg == 0);
+						state.registers.set_subtract(false);
+						state.registers.set_half_carry(false);
+						state.registers.set_carry(false);
+						state.registers.opcode_bytecount = Some(2);
+						CycleResult::Finished
+					},
+					_ => unreachable!(),
+				}
+			}
+		}
+	};
+}
+
+define_swap_reg!(b);
+define_swap_reg!(c);
+define_swap_reg!(d);
+define_swap_reg!(e);
+define_swap_reg!(h);
+define_swap_reg!(l);
+define_swap_reg!(a);

@@ -4,6 +4,7 @@ mod joypad;
 mod mapper;
 mod memory;
 mod ppu;
+mod serial;
 mod sound;
 mod timer;
 
@@ -14,7 +15,7 @@ use memory::Memory;
 use ppu::Ppu;
 use timer::Timer;
 
-use self::{cpu::Registers, mapper::NoMBC, sound::Sound};
+use self::{cpu::Registers, mapper::NoMBC, serial::Serial, sound::Sound};
 
 pub struct DmaState {
 	pub base: u8,
@@ -42,13 +43,14 @@ pub struct Gameboy {
 	timer: Timer,
 	pub registers: Registers,
 	pub joypad: Joypad,
+	pub serial: Serial,
 	pub dma: DmaState,
 	pub sound: Sound,
 
 	pub single_step: bool,
-	pub breakpoints: [bool; u16::MAX as usize],
-	pub mem_read_breakpoints: [bool; u16::MAX as usize],
-	pub mem_write_breakpoints: [bool; u16::MAX as usize],
+	pub breakpoints: [bool; u16::MAX as usize + 1],
+	pub mem_read_breakpoints: [bool; u16::MAX as usize + 1],
+	pub mem_write_breakpoints: [bool; u16::MAX as usize + 1],
 	trigger_bp: bool,
 }
 
@@ -60,14 +62,15 @@ impl Gameboy {
 			interrupts: Interrupts::new(),
 			timer: Timer::new(),
 			joypad: Joypad::new(),
+			serial: Serial::new(),
 			dma: DmaState::new(),
 			ppu: Ppu::new(),
 			registers: Registers::default(),
 			sound: Sound::default(),
 			single_step: false,
-			breakpoints: [false; u16::MAX as usize],
-			mem_read_breakpoints: [false; u16::MAX as usize],
-			mem_write_breakpoints: [false; u16::MAX as usize],
+			breakpoints: [false; u16::MAX as usize + 1],
+			mem_read_breakpoints: [false; u16::MAX as usize + 1],
+			mem_write_breakpoints: [false; u16::MAX as usize + 1],
 			trigger_bp: false,
 		}
 	}
@@ -258,7 +261,8 @@ impl Gameboy {
 	fn cpu_read_io(&self, address: u16) -> u8 {
 		match address {
 			0xFF00 => self.joypad.cpu_read(),
-			0xFF01..=0xFF02 => unimplemented!("Serial"),
+			0xFF01 => self.serial.sb,
+			0xFF02 => self.serial.sc,
 			0xFF03 => 0, // Unused
 			0xFF04 => self.timer.div,
 			0xFF05 => self.timer.tima,
@@ -317,7 +321,8 @@ impl Gameboy {
 	fn cpu_write_io(&mut self, address: u16, value: u8) {
 		match address {
 			0xFF00 => self.joypad.cpu_write(value),
-			0xFF01..=0xFF02 => unimplemented!("Serial"),
+			0xFF01 => self.serial.sb = value,
+			0xFF02 => self.serial.sc = value,
 			0xFF03 => {} // Unused
 			0xFF04 => self.timer.div = value,
 			0xFF05 => self.timer.tima = value,

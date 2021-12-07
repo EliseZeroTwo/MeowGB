@@ -197,6 +197,7 @@ pub fn jp_nz_u16(state: &mut Gameboy) -> CycleResult {
 		2 => {
 			if state.registers.get_zero() {
 				state.registers.take_mem();
+				state.registers.take_hold();
 				state.registers.opcode_bytecount = Some(3);
 				CycleResult::Finished
 			} else {
@@ -228,6 +229,7 @@ pub fn jp_nc_u16(state: &mut Gameboy) -> CycleResult {
 		2 => {
 			if state.registers.get_carry() {
 				state.registers.take_mem();
+				state.registers.take_hold();
 				state.registers.opcode_bytecount = Some(3);
 				CycleResult::Finished
 			} else {
@@ -259,6 +261,7 @@ pub fn jp_z_u16(state: &mut Gameboy) -> CycleResult {
 		2 => {
 			if !state.registers.get_zero() {
 				state.registers.take_mem();
+				state.registers.take_hold();
 				state.registers.opcode_bytecount = Some(3);
 				CycleResult::Finished
 			} else {
@@ -290,6 +293,7 @@ pub fn jp_c_u16(state: &mut Gameboy) -> CycleResult {
 		2 => {
 			if !state.registers.get_carry() {
 				state.registers.take_mem();
+				state.registers.take_hold();
 				state.registers.opcode_bytecount = Some(3);
 				CycleResult::Finished
 			} else {
@@ -352,6 +356,7 @@ pub fn call_nz_u16(state: &mut Gameboy) -> CycleResult {
 		2 => {
 			if state.registers.get_zero() {
 				state.registers.take_mem();
+				state.registers.take_hold();
 				state.registers.opcode_bytecount = Some(3);
 				CycleResult::Finished
 			} else {
@@ -391,6 +396,7 @@ pub fn call_nc_u16(state: &mut Gameboy) -> CycleResult {
 		2 => {
 			if state.registers.get_carry() {
 				state.registers.take_mem();
+				state.registers.take_hold();
 				state.registers.opcode_bytecount = Some(3);
 				CycleResult::Finished
 			} else {
@@ -430,6 +436,7 @@ pub fn call_z_u16(state: &mut Gameboy) -> CycleResult {
 		2 => {
 			if !state.registers.get_zero() {
 				state.registers.take_mem();
+				state.registers.take_hold();
 				state.registers.opcode_bytecount = Some(3);
 				CycleResult::Finished
 			} else {
@@ -469,6 +476,7 @@ pub fn call_c_u16(state: &mut Gameboy) -> CycleResult {
 		2 => {
 			if !state.registers.get_carry() {
 				state.registers.take_mem();
+				state.registers.take_hold();
 				state.registers.opcode_bytecount = Some(3);
 				CycleResult::Finished
 			} else {
@@ -655,3 +663,38 @@ pub fn ret_c(state: &mut Gameboy) -> CycleResult {
 		_ => unreachable!(),
 	}
 }
+
+macro_rules! define_rst {
+	($addr:literal) => {
+		paste::paste! {
+			pub fn [<rst_ $addr>](state: &mut Gameboy) -> CycleResult {
+				match state.registers.cycle {
+					0 => CycleResult::NeedsMore,
+					1 => {
+						state.cpu_push_stack((state.registers.pc >> 8) as u8);
+						CycleResult::NeedsMore
+					},
+					2 => {
+						state.cpu_push_stack((state.registers.pc & 0xFF) as u8);
+						CycleResult::NeedsMore
+					},
+					3 => {
+						state.registers.pc = $addr;
+						state.registers.opcode_bytecount = Some(0);
+						CycleResult::Finished
+					},
+					_ => unreachable!(),
+				}
+			}
+		}
+	};
+}
+
+define_rst!(0x0);
+define_rst!(0x08);
+define_rst!(0x10);
+define_rst!(0x18);
+define_rst!(0x20);
+define_rst!(0x28);
+define_rst!(0x30);
+define_rst!(0x38);
