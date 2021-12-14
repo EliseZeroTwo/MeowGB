@@ -166,7 +166,6 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			Some(opcode) => opcode,
 			None => match state.registers.mem_read_hold.take() {
 				Some(opcode) => {
-					log::debug!("Executing instruction {:#X}", opcode);
 					state.registers.current_opcode = Some(opcode);
 					opcode
 				}

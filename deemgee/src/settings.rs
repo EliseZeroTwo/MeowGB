@@ -26,4 +26,5 @@ pub struct Bindings {
 
 	pub pause: VirtualKeyCode,
 	pub exit: VirtualKeyCode,
+	pub log_ops: VirtualKeyCode,
 }

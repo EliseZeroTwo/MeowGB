@@ -40,7 +40,7 @@ pub enum DmgError {
 	IO(#[from] std::io::Error),
 }
 
-fn main() -> Result<(), DmgError> {
+fn main() {
 	env_logger::init();
 
 	let args: CliArgs = argh::from_env();
@@ -49,11 +49,11 @@ fn main() -> Result<(), DmgError> {
 	let (window_side_tx, gb_side_rx) = channel::<WindowEvent>();
 	let (gb_side_tx, window_side_rx) = channel::<GameboyEvent>();
 
-	let jh = std::thread::spawn(move || run_gameboy(config, args, gb_side_rx, gb_side_tx));
+	let jh = std::thread::spawn(move || run_gameboy(config, args, gb_side_rx, gb_side_tx).unwrap());
 
 	window::run_window(config, window_side_rx, window_side_tx);
 
-	jh.join().unwrap()
+	jh.join().unwrap();
 }
 
 pub fn run_gameboy(
@@ -112,6 +112,9 @@ pub fn run_gameboy(
 				window::WindowEvent::LeftToggle => gameboy.joypad.left = !gameboy.joypad.left,
 				window::WindowEvent::RightToggle => gameboy.joypad.right = !gameboy.joypad.right,
 				window::WindowEvent::PauseToggle => paused = !paused,
+				window::WindowEvent::LogToggle => {
+					gameboy.log_instructions = !gameboy.log_instructions
+				}
 				window::WindowEvent::Exit => break 'outer,
 			}
 		}

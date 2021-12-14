@@ -52,6 +52,7 @@ pub struct Gameboy {
 	pub mem_read_breakpoints: [bool; u16::MAX as usize + 1],
 	pub mem_write_breakpoints: [bool; u16::MAX as usize + 1],
 	trigger_bp: bool,
+	pub log_instructions: bool,
 }
 
 impl Gameboy {
@@ -72,6 +73,7 @@ impl Gameboy {
 			mem_read_breakpoints: [false; u16::MAX as usize + 1],
 			mem_write_breakpoints: [false; u16::MAX as usize + 1],
 			trigger_bp: false,
+			log_instructions: false,
 		}
 	}
 

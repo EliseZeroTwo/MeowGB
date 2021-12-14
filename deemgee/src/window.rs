@@ -39,6 +39,7 @@ pub enum WindowEvent {
 	LeftToggle,
 	RightToggle,
 	PauseToggle,
+	LogToggle,
 	Exit,
 }
 
@@ -137,6 +138,10 @@ pub fn run_window(config: DeemgeeConfig, rx: Receiver<GameboyEvent>, tx: Sender<
 
 			if input.key_pressed(config.bindings.pause) {
 				tx.send(WindowEvent::PauseToggle).unwrap();
+			}
+
+			if input.key_pressed(config.bindings.log_ops) {
+				tx.send(WindowEvent::LogToggle).unwrap();
 			}
 
 			define_keypress!(input, config, keymap, tx, a, AToggle);
