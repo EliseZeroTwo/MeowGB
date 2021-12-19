@@ -16,13 +16,14 @@ macro_rules! define_bitfield_u8_gs {
 
 pub struct Interrupts {
 	pub ime: bool,
+	pub ei_queued: bool,
 	pub interrupt_enable: u8,
 	pub interrupt_flag: u8,
 }
 
 impl Interrupts {
 	pub fn new() -> Self {
-		Self { ime: false, interrupt_enable: 0, interrupt_flag: 0 }
+		Self { ime: false, interrupt_enable: 0, interrupt_flag: 0, ei_queued: false }
 	}
 
 	define_bitfield_u8_gs!(ie_vblank, 0, interrupt_enable);
@@ -35,4 +36,11 @@ impl Interrupts {
 	define_bitfield_u8_gs!(if_timer, 2, interrupt_flag);
 	define_bitfield_u8_gs!(if_serial, 3, interrupt_flag);
 	define_bitfield_u8_gs!(if_joypad, 4, interrupt_flag);
+
+	pub fn cpu_set_ime(&mut self, val: bool) {
+		self.ei_queued = val;
+		if !val {
+			self.ime = false;
+		}
+	}
 }

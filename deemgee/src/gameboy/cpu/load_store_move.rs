@@ -168,6 +168,28 @@ define_ld_reg_deref!(0x7E, a, hl);
 define_ld_reg_deref!(0x0A, a, bc);
 define_ld_reg_deref!(0x1A, a, de);
 
+opcode!(ld_deref_bc_a, 0x02, "LD (BC),A", false, {
+	0 => {
+		state.cpu_write_u8(state.registers.get_bc(), state.registers.a);
+		CycleResult::NeedsMore
+	},
+	1 => {
+		state.registers.opcode_bytecount = Some(1);
+		CycleResult::Finished
+	}
+});
+
+opcode!(ld_deref_de_a, 0x12, "LD (DE),A", false, {
+	0 => {
+		state.cpu_write_u8(state.registers.get_de(), state.registers.a);
+		CycleResult::NeedsMore
+	},
+	1 => {
+		state.registers.opcode_bytecount = Some(1);
+		CycleResult::Finished
+	}
+});
+
 opcode!(ld_hl_plus_a, 0x22, "LD (HL+),A", false, {
 	0 => {
 		state.cpu_write_u8(state.registers.get_hl(), state.registers.a);
@@ -218,6 +240,33 @@ opcode!(ld_a_hl_minus, 0x3A, "LD A,(HL-)", false, {
 		let reg = state.registers.get_hl().overflowing_sub(1).0;
 		state.registers.set_hl(reg);
 		state.registers.opcode_bytecount = Some(1);
+		CycleResult::Finished
+	}
+});
+
+opcode!(ld_hl_sp_i8, 0xF8, "LD HL,SP+i8", false, {
+	0 => {
+		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
+		CycleResult::NeedsMore
+	},
+	1 => {
+		let val = state.registers.take_mem() as i8;
+
+		let rhs = if val < 0 {
+			state.registers.sp.overflowing_sub((val as u8 & !(1u8 << 7)) as u16).0
+		} else {
+			state.registers.sp.overflowing_add(val as u16).0
+		};
+
+		state.registers.set_hl(rhs);
+		state.registers.set_zero(false);
+		state.registers.set_subtract(false);
+		state.registers.set_half_carry((state.registers.sp & 0xF) + (val as u16 & 0xF) > 0xF);
+		state.registers.set_carry((state.registers.sp & 0xFF) + (val as u16 & 0xFF) > 0xFF);
+		CycleResult::NeedsMore
+	},
+	2 => {
+		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });

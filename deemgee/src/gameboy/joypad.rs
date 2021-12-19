@@ -4,6 +4,19 @@ pub enum JoypadMode {
 	Direction,
 }
 
+macro_rules! joypad_input {
+	($input:ident, $mode:ident) => {
+		paste::paste! {
+			pub fn [<set_ $input>](&mut self, val: bool) {
+				if val && self.mode == JoypadMode::$mode {
+					self.interrupt_triggered = true;
+				}
+				self.$input = val
+			}
+		}
+	};
+}
+
 pub struct Joypad {
 	mode: JoypadMode,
 	pub down: bool,
@@ -14,6 +27,7 @@ pub struct Joypad {
 	pub select: bool,
 	pub b: bool,
 	pub a: bool,
+	pub interrupt_triggered: bool,
 }
 
 impl Joypad {
@@ -28,6 +42,7 @@ impl Joypad {
 			select: false,
 			b: false,
 			a: false,
+			interrupt_triggered: false,
 		}
 	}
 
@@ -49,6 +64,15 @@ impl Joypad {
 			}
 		}
 	}
+
+	joypad_input!(a, Action);
+	joypad_input!(b, Action);
+	joypad_input!(start, Action);
+	joypad_input!(select, Action);
+	joypad_input!(up, Direction);
+	joypad_input!(down, Direction);
+	joypad_input!(left, Direction);
+	joypad_input!(right, Direction);
 
 	pub fn cpu_write(&mut self, content: u8) {
 		if (content >> 5) & 0b1 == 0 {

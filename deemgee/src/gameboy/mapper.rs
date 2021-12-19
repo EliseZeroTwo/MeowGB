@@ -1,3 +1,5 @@
+pub mod mbc1;
+
 pub trait Mapper {
 	fn read_rom_u8(&self, address: u16) -> u8;
 	fn write_rom_u8(&mut self, address: u16, value: u8);

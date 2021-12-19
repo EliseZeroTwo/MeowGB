@@ -103,14 +103,16 @@ pub fn run_gameboy(
 	'outer: loop {
 		while let Ok(event) = rx.try_recv() {
 			match event {
-				window::WindowEvent::AToggle => gameboy.joypad.a = !gameboy.joypad.a,
-				window::WindowEvent::BToggle => gameboy.joypad.b = !gameboy.joypad.b,
-				window::WindowEvent::SelectToggle => gameboy.joypad.select = !gameboy.joypad.select,
-				window::WindowEvent::StartToggle => gameboy.joypad.start = !gameboy.joypad.start,
-				window::WindowEvent::UpToggle => gameboy.joypad.up = !gameboy.joypad.up,
-				window::WindowEvent::DownToggle => gameboy.joypad.down = !gameboy.joypad.down,
-				window::WindowEvent::LeftToggle => gameboy.joypad.left = !gameboy.joypad.left,
-				window::WindowEvent::RightToggle => gameboy.joypad.right = !gameboy.joypad.right,
+				window::WindowEvent::AToggle => gameboy.joypad.set_a(!gameboy.joypad.a),
+				window::WindowEvent::BToggle => gameboy.joypad.set_b(!gameboy.joypad.b),
+				window::WindowEvent::SelectToggle => {
+					gameboy.joypad.set_select(!gameboy.joypad.select)
+				}
+				window::WindowEvent::StartToggle => gameboy.joypad.set_start(!gameboy.joypad.start),
+				window::WindowEvent::UpToggle => gameboy.joypad.set_up(!gameboy.joypad.up),
+				window::WindowEvent::DownToggle => gameboy.joypad.set_down(!gameboy.joypad.down),
+				window::WindowEvent::LeftToggle => gameboy.joypad.set_left(!gameboy.joypad.left),
+				window::WindowEvent::RightToggle => gameboy.joypad.set_right(!gameboy.joypad.right),
 				window::WindowEvent::PauseToggle => paused = !paused,
 				window::WindowEvent::LogToggle => {
 					gameboy.log_instructions = !gameboy.log_instructions

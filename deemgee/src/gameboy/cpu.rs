@@ -104,6 +104,24 @@ impl Registers {
 pub fn tick_cpu(state: &mut Gameboy) {
 	state.registers.mem_op_happened = false;
 
+	if state.joypad.interrupt_triggered {
+		state.joypad.interrupt_triggered = false;
+		state.interrupts.write_if_joypad(true);
+	}
+
+	if state.registers.cycle == 0 && state.halt {
+		if (state.interrupts.read_ie_vblank() && state.interrupts.read_if_vblank())
+			|| (state.interrupts.read_ie_lcd_stat() && state.interrupts.read_if_lcd_stat())
+			|| (state.interrupts.read_ie_timer() && state.interrupts.read_if_timer())
+			|| (state.interrupts.read_ie_serial() && state.interrupts.read_if_serial())
+			|| (state.interrupts.read_ie_joypad() && state.interrupts.read_if_joypad())
+		{
+			state.halt = false;
+		} else {
+			return;
+		}
+	}
+
 	// TODO: Interrupts
 	if state.registers.cycle == 0 && state.interrupts.ime {
 		if state.interrupts.read_ie_vblank() && state.interrupts.read_if_vblank() {
@@ -129,6 +147,17 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		}
 	}
 
+	if state.registers.cycle == 0 && state.interrupts.ei_queued {
+		state.interrupts.ime = state.interrupts.ei_queued;
+		state.interrupts.ei_queued = false;
+	}
+
+	if state.registers.cycle == 0 && state.halt_bug {
+		state.used_halt_bug = true;
+		state.halt_bug = false;
+		state.registers.pc = state.registers.pc.overflowing_sub(1).0;
+	}
+
 	let result = if let Some(idx) = state.registers.in_interrupt_vector {
 		match state.registers.cycle {
 			0 => {
@@ -138,11 +167,11 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			}
 			1 => CycleResult::NeedsMore,
 			2 => {
-				state.cpu_push_stack((state.registers.pc.overflowing_add(3).0 >> 8) as u8);
+				state.cpu_push_stack((state.registers.pc >> 8) as u8);
 				CycleResult::NeedsMore
 			}
 			3 => {
-				state.cpu_push_stack(state.registers.pc.overflowing_add(3).0 as u8);
+				state.cpu_push_stack(state.registers.pc as u8);
 				CycleResult::NeedsMore
 			}
 			4 => {
@@ -179,6 +208,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		let result: CycleResult = match opcode {
 			0x00 => misc::nop,
 			0x01 => load_store_move::ld_bc_imm_u16,
+			0x02 => load_store_move::ld_deref_bc_a,
 			0x03 => alu::inc_bc,
 			0x04 => alu::inc_b,
 			0x05 => alu::dec_b,
@@ -191,6 +221,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0x0d => alu::dec_c,
 			0x0e => load_store_move::ld_c_imm_u8,
 			0x11 => load_store_move::ld_de_imm_u16,
+			0x12 => load_store_move::ld_deref_de_a,
 			0x13 => alu::inc_de,
 			0x14 => alu::inc_d,
 			0x15 => alu::dec_d,
@@ -203,6 +234,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0x1c => alu::inc_e,
 			0x1d => alu::dec_e,
 			0x1e => load_store_move::ld_e_imm_u8,
+			0x1f => alu::rra,
 			0x20 => flow::jr_nz_i8,
 			0x21 => load_store_move::ld_hl_imm_u16,
 			0x22 => load_store_move::ld_hl_plus_a,
@@ -288,6 +320,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0x73 => load_store_move::ld_deref_hl_e,
 			0x74 => load_store_move::ld_deref_hl_h,
 			0x75 => load_store_move::ld_deref_hl_l,
+			0x76 => misc::halt,
 			0x77 => load_store_move::ld_deref_hl_a,
 			0x78 => load_store_move::ld_a_b,
 			0x79 => load_store_move::ld_a_c,
@@ -380,6 +413,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0xD0 => flow::ret_nc,
 			0xD1 => load_store_move::pop_de,
 			0xD2 => flow::jp_nc_u16,
+			0xD3 => panic!("Executing bad opcode {:#02X}", opcode),
 			0xD4 => flow::call_nc_u16,
 			0xD5 => load_store_move::push_de,
 			0xD6 => alu::sub_a_imm_u8,
@@ -387,17 +421,21 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0xD8 => flow::ret_c,
 			0xD9 => flow::reti,
 			0xDA => flow::jp_c_u16,
+			0xDB => panic!("Executing bad opcode {:#02X}", opcode),
 			0xDC => flow::call_c_u16,
+			0xDD => panic!("Executing bad opcode {:#02X}", opcode),
 			0xDE => alu::sbc_a_imm_u8,
 			0xDF => flow::rst_0x18,
 			0xE0 => load_store_move::ldh_imm_u8_a,
 			0xE1 => load_store_move::pop_hl,
 			0xE2 => load_store_move::ldh_deref_c_a,
+			0xE3 | 0xE4 => panic!("Executing bad opcode {:#02X}", opcode),
 			0xE5 => load_store_move::push_hl,
 			0xE6 => alu::and_a_imm_u8,
 			0xE7 => flow::rst_0x20,
 			0xE9 => flow::jp_hl,
 			0xEA => load_store_move::ld_deref_imm_u16_a,
+			0xEB | 0xEC | 0xED => panic!("Executing bad opcode {:#02X}", opcode),
 			0xEE => alu::xor_a_imm_u8,
 			0xEF => flow::rst_0x28,
 			0xF0 => load_store_move::ldh_a_imm_u8,
@@ -407,9 +445,11 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0xF5 => load_store_move::push_af,
 			0xF6 => alu::or_a_imm_u8,
 			0xF7 => flow::rst_0x30,
+			0xF8 => load_store_move::ld_hl_sp_i8,
 			0xF9 => load_store_move::ld_sp_hl,
 			0xFA => load_store_move::ld_a_deref_imm_u16,
 			0xFB => misc::ei,
+			0xFC | 0xFD => panic!("Executing bad opcode {:#02X}", opcode),
 			0xFE => alu::cp_a_imm_u8,
 			0xFF => flow::rst_0x38,
 			unknown => {
@@ -425,13 +465,16 @@ pub fn tick_cpu(state: &mut Gameboy) {
 	};
 
 	if result == CycleResult::Finished {
+		if state.used_halt_bug {
+			state.registers.pc = state.registers.pc.overflowing_add(1).0;
+		}
+
 		match state.registers.opcode_bytecount {
-			Some(len) => state.registers.pc += len as u16,
+			Some(len) => state.registers.pc = state.registers.pc.overflowing_add(len as u16).0,
 			None => panic!("Forgot to set opcode len"),
 		}
 
 		if !state.registers.mem_op_happened {
-			log::trace!("Memory bus clear, precaching next opcode");
 			state.cpu_read_u8(state.registers.pc);
 		}
 
@@ -439,7 +482,6 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		state.registers.current_prefixed_opcode = None;
 		state.registers.current_opcode = None;
 		state.registers.opcode_bytecount = None;
-		log::trace!("Cycle finished");
 	} else {
 		state.registers.cycle += 1;
 	}

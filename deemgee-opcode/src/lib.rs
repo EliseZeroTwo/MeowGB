@@ -87,13 +87,15 @@ pub fn opcode(item: TokenStream) -> TokenStream {
 	let log = if extended.value {
 		quote::quote! {
 			if state.registers.cycle == 1 && state.log_instructions {
-				log::debug!("Prefixed OP {} ({:#02X})", #readable, #opcode);
+				log::debug!("(PC: {:#02X}) Prefixed OP {} ({:#02X})", state.registers.pc, #readable, #opcode);
+				#regs
 			}
 		}
 	} else {
 		quote::quote! {
 			if state.registers.cycle == 0 && state.log_instructions {
-				log::debug!("OP {} ({:#02X})", #readable, #opcode);
+				log::debug!("(PC: {:#02X}) OP {} ({:#02X})", state.registers.pc, #readable, #opcode);
+				#regs
 			}
 		}
 	};
@@ -101,7 +103,6 @@ pub fn opcode(item: TokenStream) -> TokenStream {
 	let out = quote::quote! {
 		#fn_sig {
 			#log
-			#regs
 
 			#match_statement
 		}

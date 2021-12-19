@@ -15,7 +15,12 @@ use memory::Memory;
 use ppu::Ppu;
 use timer::Timer;
 
-use self::{cpu::Registers, mapper::NoMBC, serial::Serial, sound::Sound};
+use self::{
+	cpu::Registers,
+	mapper::{mbc1::MBC1, NoMBC},
+	serial::Serial,
+	sound::Sound,
+};
 
 pub struct DmaState {
 	pub base: u8,
@@ -53,6 +58,9 @@ pub struct Gameboy {
 	pub mem_write_breakpoints: [bool; u16::MAX as usize + 1],
 	trigger_bp: bool,
 	pub log_instructions: bool,
+	pub halt: bool,
+	pub halt_bug: bool,
+	pub used_halt_bug: bool,
 }
 
 impl Gameboy {
@@ -74,6 +82,9 @@ impl Gameboy {
 			mem_write_breakpoints: [false; u16::MAX as usize + 1],
 			trigger_bp: false,
 			log_instructions: false,
+			halt: false,
+			halt_bug: false,
+			used_halt_bug: false,
 		}
 	}
 
@@ -100,6 +111,7 @@ impl Gameboy {
 	pub fn load_cartridge(&mut self, bytes: Vec<u8>) {
 		match bytes[0x147] {
 			0 => self.cartridge = Some(Box::new(NoMBC::new(bytes))),
+			1 => self.cartridge = Some(Box::new(MBC1::new(bytes))),
 			other => unimplemented!("Cartidge type: {:#X}", other),
 		}
 	}
@@ -235,6 +247,9 @@ impl Gameboy {
 		cpu::tick_cpu(self);
 		let redraw_requested = self.ppu.tick(&mut self.interrupts);
 		self.tick_dma();
+		if self.serial.tick() {
+			self.interrupts.write_if_serial(true);
+		}
 		redraw_requested
 	}
 

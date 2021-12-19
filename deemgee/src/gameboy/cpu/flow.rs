@@ -477,6 +477,7 @@ opcode!(ret, 0xC9, "RET", false, {
 	},
 	3 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
+		println!("RET to {:#04X}", address);
 		state.registers.pc = address;
 		state.registers.opcode_bytecount = Some(0);
 		CycleResult::Finished
@@ -634,11 +635,11 @@ macro_rules! define_rst {
 					CycleResult::NeedsMore
 				},
 				1 => {
-					state.cpu_push_stack((state.registers.pc >> 8) as u8);
+					state.cpu_push_stack((state.registers.pc.overflowing_add(1).0 >> 8) as u8);
 					CycleResult::NeedsMore
 				},
 				2 => {
-					state.cpu_push_stack((state.registers.pc & 0xFF) as u8);
+					state.cpu_push_stack((state.registers.pc.overflowing_add(1).0 & 0xFF) as u8);
 					CycleResult::NeedsMore
 				},
 				3 => {

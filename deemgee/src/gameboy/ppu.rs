@@ -317,18 +317,18 @@ impl Ppu {
 				}
 
 				if entry.y_flip() {
-					tile_y_idx = 8 - tile_y_idx;
+					tile_y_idx = 7 - tile_y_idx;
 				}
 
 				let tile_idx =
 					if is_second_tile { entry.tile_idx | 1 } else { entry.tile_idx & 0xFE };
 
 				for x in 0..8 {
-					let fb_x = entry.x.overflowing_sub(8 - x).0;
+					let fb_x = entry.x.overflowing_sub(7 - x).0;
 
 					let sprite_line_base = fb_x as usize * 4;
 
-					let tile_x_idx = if entry.x_flip() { 8 - x } else { x };
+					let tile_x_idx = if entry.x_flip() { 7 - x } else { x };
 
 					let color = Self::parse_sprite_tile_color(
 						self.read_obj_tile(tile_idx),
@@ -386,7 +386,7 @@ impl Ppu {
 	}
 
 	fn set_mode(&mut self, interrupts: &mut Interrupts, mode: PPUMode) {
-		log::debug!("PPU switching mode to {:?} @ {}", mode, self.cycle_counter);
+		log::trace!("PPU switching mode to {:?} @ {}", mode, self.cycle_counter);
 		self.stat &= !0b11;
 		self.stat |= mode.mode_flag();
 		self.cycle_counter = 0;

@@ -30,7 +30,7 @@ impl Timer {
 		if self.enable {
 			self.tima_counter = self.tima_counter.overflowing_add(1).0;
 			if self.tima_counter >= self.clock.cycles() {
-				self.tima += self.tima.overflowing_add(1).0;
+				self.tima = self.tima.overflowing_add(1).0;
 
 				return self.tima == 0;
 			}
@@ -80,7 +80,7 @@ impl TimerClock {
 			1 => Self::C16,
 			2 => Self::C64,
 			3 => Self::C256,
-			4 => Self::C1024,
+			0 => Self::C1024,
 			_ => unreachable!(),
 		}
 	}

@@ -17,12 +17,7 @@ pub fn sub_with_carry(lhs: u8, rhs: u8, carry: bool) -> CarryResult {
 	let (result, second_carry) = first_res.overflowing_sub(carry_u8);
 
 	let carry = first_carry || second_carry;
-
-	let first_hc_res = (lhs & 0xF).overflowing_sub(rhs & 0xF).0;
-	let first_half_carry = (first_hc_res >> 4) & 0b1 == 1;
-	let second_half_carry = ((first_hc_res.overflowing_sub(carry_u8).0) >> 4) & 0b1 == 1;
-
-	let half_carry = first_half_carry || second_half_carry;
+	let half_carry = (lhs & 0xF) < (rhs & 0xF) + carry_u8;
 
 	CarryResult { result, carry, half_carry }
 }
@@ -34,26 +29,21 @@ pub fn add_with_carry(lhs: u8, rhs: u8, carry: bool) -> CarryResult {
 	let (result, second_carry) = first_res.overflowing_add(carry_u8);
 
 	let carry = first_carry || second_carry;
-
-	let first_hc_res = (lhs & 0xF) + (rhs & 0xF);
-	let first_half_carry = (first_hc_res >> 4) & 0b1 == 1;
-	let second_half_carry = ((first_hc_res + carry_u8) >> 4) & 0b1 == 1;
-
-	let half_carry = first_half_carry || second_half_carry;
+	let half_carry = (lhs & 0xF) + (rhs & 0xF) > 0xF;
 
 	CarryResult { result, carry, half_carry }
 }
 
 pub fn add(lhs: u8, rhs: u8) -> CarryResult {
 	let (result, carry) = lhs.overflowing_add(rhs);
-	let half_carry = (((lhs & 0xF) + (rhs & 0xF)) >> 4) & 0b1 == 1;
+	let half_carry = (lhs & 0xF) + (rhs & 0xF) > 0xF;
 
 	CarryResult { result, carry, half_carry }
 }
 
 pub fn sub(lhs: u8, rhs: u8) -> CarryResult {
 	let (result, carry) = lhs.overflowing_sub(rhs);
-	let half_carry = (((lhs & 0xF).overflowing_sub(rhs & 0xF).0) >> 4) & 0b1 == 1;
+	let half_carry = (lhs & 0xF) < (rhs & 0xF);
 
 	CarryResult { result, carry, half_carry }
 }
@@ -511,6 +501,25 @@ opcode!(rla, 0x17, "RLA", false, {
 	}
 });
 
+opcode!(rra, 0x1f, "RRA", false, {
+	0 => {
+		let carry = state.registers.a & 0b1 == 1;
+		state.registers.a >>= 1;
+
+		if state.registers.get_carry() {
+			state.registers.a = state.registers.a.wrapping_add(1 << 7);
+		}
+
+		state.registers.set_zero(false);
+		state.registers.set_subtract(false);
+		state.registers.set_half_carry(false);
+		state.registers.set_carry(carry);
+
+		state.registers.opcode_bytecount = Some(1);
+		CycleResult::Finished
+	}
+});
+
 macro_rules! define_inc_u16_reg {
 	($op:literal, $lreg:ident, $rreg:ident) => {
 		paste::paste! {
@@ -818,15 +827,18 @@ macro_rules! define_add_hl_u16_reg {
 					CycleResult::NeedsMore
 				},
 				1 => {
+					let CarryResult { result, carry, half_carry } = add(state.registers.h, state.registers.$lreg);
+					state.registers.h = result;
+					state.registers.set_half_carry(half_carry);
+					state.registers.set_carry(carry);
+
 					if state.registers.take_hold() != 0 {
-						let CarryResult { result, carry, half_carry } = add(state.registers.h, state.registers.$lreg);
+						let CarryResult { result, carry: s_carry, half_carry: s_half_carry } = add(state.registers.h, 1);
 						state.registers.h = result;
-						state.registers.set_half_carry(half_carry);
-						state.registers.set_carry(carry);
-					} else {
-						state.registers.set_half_carry(false);
-						state.registers.set_carry(false);
+						state.registers.set_half_carry(half_carry || s_half_carry);
+						state.registers.set_carry(carry || s_carry);
 					}
+
 					state.registers.set_subtract(false);
 					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
@@ -848,16 +860,18 @@ opcode!(add_hl_sp, 0x39, "ADD HL, SP", false, {
 		CycleResult::NeedsMore
 	},
 	1 => {
+		let CarryResult { result, carry, half_carry } = add(state.registers.h, (state.registers.sp >> 8) as u8);
+		state.registers.h = result;
+		state.registers.set_half_carry(half_carry);
+		state.registers.set_carry(carry);
+
 		if state.registers.take_hold() != 0 {
-			let CarryResult { result, carry, half_carry } =
-				add(state.registers.h, (state.registers.sp >> 8) as u8);
+			let CarryResult { result, carry: s_carry, half_carry: s_half_carry } = add(state.registers.h, 1);
 			state.registers.h = result;
-			state.registers.set_half_carry(half_carry);
-			state.registers.set_carry(carry);
-		} else {
-			state.registers.set_half_carry(false);
-			state.registers.set_carry(false);
+			state.registers.set_half_carry(half_carry || s_half_carry);
+			state.registers.set_carry(carry || s_carry);
 		}
+
 		state.registers.set_subtract(false);
 		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
