@@ -22,6 +22,7 @@ struct OpcodeArgs {
 	pub opcode: LitInt,
 	pub readable: Expr,
 	pub extended: LitBool,
+	pub length: LitInt,
 	pub implementation: Punctuated<OpcodeImpl, syn::Token!(,)>,
 }
 
@@ -35,21 +36,24 @@ impl Parse for OpcodeArgs {
 		input.parse::<Token![,]>()?;
 		let extended = input.parse()?;
 		input.parse::<Token![,]>()?;
+		let length = input.parse()?;
+		input.parse::<Token![,]>()?;
 		let implementation_pb;
 		braced!(implementation_pb in input);
 		let implementation = Punctuated::parse_separated_nonempty(&implementation_pb)?;
-		Ok(Self { name, opcode, readable, extended, implementation })
+		Ok(Self { name, opcode, readable, extended, length, implementation })
 	}
 }
 
 #[proc_macro]
 pub fn opcode(item: TokenStream) -> TokenStream {
-	let OpcodeArgs { name, opcode, readable, extended, implementation } =
+	let OpcodeArgs { name, opcode, readable, extended, length, implementation } =
 		parse_macro_input!(item as OpcodeArgs);
 
 	let name_s = name.to_string();
 
 	let opcode = opcode.base10_parse::<u8>().expect("Failed to parse opcode as u8");
+	let length = length.base10_parse::<u8>().expect("Failed to parse opcode length as u8");
 
 	let fn_sig = quote::quote! {
 		pub fn #name(state: &mut Gameboy) -> CycleResult
@@ -104,7 +108,13 @@ pub fn opcode(item: TokenStream) -> TokenStream {
 		#fn_sig {
 			#log
 
-			#match_statement
+			let res: CycleResult = #match_statement;
+
+			if res != CycleResult::NeedsMore {
+				state.registers.opcode_bytecount = Some(#length);
+			}
+
+			res
 		}
 	};
 

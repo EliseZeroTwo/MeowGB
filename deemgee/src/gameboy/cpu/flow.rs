@@ -3,7 +3,7 @@ use deemgee_opcode::opcode;
 use super::CycleResult;
 use crate::gameboy::Gameboy;
 
-opcode!(jr_nz_i8, 0x20, "JR NZ,i8", false, {
+opcode!(jr_nz_i8, 0x20, "JR NZ,i8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -11,7 +11,6 @@ opcode!(jr_nz_i8, 0x20, "JR NZ,i8", false, {
 	1 => {
 		if state.registers.get_zero() {
 			state.registers.take_mem();
-			state.registers.opcode_bytecount = Some(2);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -26,12 +25,11 @@ opcode!(jr_nz_i8, 0x20, "JR NZ,i8", false, {
 			state.registers.pc = state.registers.pc.overflowing_sub(relative.abs() as u16).0;
 		}
 
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
 
-opcode!(jr_nc_i8, 0x30, "JR NC,i8", false, {
+opcode!(jr_nc_i8, 0x30, "JR NC,i8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -39,7 +37,6 @@ opcode!(jr_nc_i8, 0x30, "JR NC,i8", false, {
 	1 => {
 		if state.registers.get_carry() {
 			state.registers.take_mem();
-			state.registers.opcode_bytecount = Some(2);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -54,12 +51,11 @@ opcode!(jr_nc_i8, 0x30, "JR NC,i8", false, {
 			state.registers.pc = state.registers.pc.overflowing_sub(relative.abs() as u16).0;
 		}
 
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
 
-opcode!(jr_z_i8, 0x28, "JR Z,i8", false, {
+opcode!(jr_z_i8, 0x28, "JR Z,i8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -67,7 +63,6 @@ opcode!(jr_z_i8, 0x28, "JR Z,i8", false, {
 	1 => {
 		if !state.registers.get_zero() {
 			state.registers.take_mem();
-			state.registers.opcode_bytecount = Some(2);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -82,12 +77,11 @@ opcode!(jr_z_i8, 0x28, "JR Z,i8", false, {
 			state.registers.pc = state.registers.pc.overflowing_sub(relative.abs() as u16).0;
 		}
 
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
 
-opcode!(jr_c_i8, 0x38, "JR C,i8", false, {
+opcode!(jr_c_i8, 0x38, "JR C,i8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -95,7 +89,6 @@ opcode!(jr_c_i8, 0x38, "JR C,i8", false, {
 	1 => {
 		if !state.registers.get_carry() {
 			state.registers.take_mem();
-			state.registers.opcode_bytecount = Some(2);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -110,12 +103,11 @@ opcode!(jr_c_i8, 0x38, "JR C,i8", false, {
 			state.registers.pc = state.registers.pc.overflowing_sub(relative.abs() as u16).0;
 		}
 
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
 
-opcode!(jr_i8, 0x18, "JR i8", false, {
+opcode!(jr_i8, 0x18, "JR i8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -132,12 +124,11 @@ opcode!(jr_i8, 0x18, "JR i8", false, {
 			state.registers.pc = state.registers.pc.overflowing_sub(relative.abs() as u16).0;
 		}
 
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
 
-opcode!(jp_u16, 0xC3, "JP u16", false, {
+opcode!(jp_u16, 0xC3, "JP u16", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -154,20 +145,18 @@ opcode!(jp_u16, 0xC3, "JP u16", false, {
 	3 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(jp_hl, 0xE9, "JP HL", false, {
+opcode!(jp_hl, 0xE9, "JP HL", false, 1, {
 	0 => {
 		state.registers.pc = state.registers.get_hl();
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(jp_nz_u16, 0xC2, "JP NZ,u16", false, {
+opcode!(jp_nz_u16, 0xC2, "JP NZ,u16", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -182,7 +171,6 @@ opcode!(jp_nz_u16, 0xC2, "JP NZ,u16", false, {
 		if state.registers.get_zero() {
 			state.registers.take_mem();
 			state.registers.take_hold();
-			state.registers.opcode_bytecount = Some(3);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -191,12 +179,11 @@ opcode!(jp_nz_u16, 0xC2, "JP NZ,u16", false, {
 	3 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(jp_nc_u16, 0xD2, "JP NC,u16", false, {
+opcode!(jp_nc_u16, 0xD2, "JP NC,u16", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -220,12 +207,11 @@ opcode!(jp_nc_u16, 0xD2, "JP NC,u16", false, {
 	3 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(jp_z_u16, 0xCA, "JP Z,u16", false, {
+opcode!(jp_z_u16, 0xCA, "JP Z,u16", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -240,7 +226,6 @@ opcode!(jp_z_u16, 0xCA, "JP Z,u16", false, {
 		if !state.registers.get_zero() {
 			state.registers.take_mem();
 			state.registers.take_hold();
-			state.registers.opcode_bytecount = Some(3);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -249,12 +234,11 @@ opcode!(jp_z_u16, 0xCA, "JP Z,u16", false, {
 	3 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(jp_c_u16, 0xDA, "JP C,u16", false, {
+opcode!(jp_c_u16, 0xDA, "JP C,u16", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -269,7 +253,6 @@ opcode!(jp_c_u16, 0xDA, "JP C,u16", false, {
 		if !state.registers.get_carry() {
 			state.registers.take_mem();
 			state.registers.take_hold();
-			state.registers.opcode_bytecount = Some(3);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -278,12 +261,11 @@ opcode!(jp_c_u16, 0xDA, "JP C,u16", false, {
 	3 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(call_u16, 0xCD, "CALL u16", false, {
+opcode!(call_u16, 0xCD, "CALL u16", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -308,12 +290,11 @@ opcode!(call_u16, 0xCD, "CALL u16", false, {
 	5 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(call_nz_u16, 0xC4, "CALL NZ,u16", false, {
+opcode!(call_nz_u16, 0xC4, "CALL NZ,u16", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -328,7 +309,6 @@ opcode!(call_nz_u16, 0xC4, "CALL NZ,u16", false, {
 		if state.registers.get_zero() {
 			state.registers.take_mem();
 			state.registers.take_hold();
-			state.registers.opcode_bytecount = Some(3);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -345,12 +325,11 @@ opcode!(call_nz_u16, 0xC4, "CALL NZ,u16", false, {
 	5 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(call_nc_u16, 0xD4, "CALL NC,u16", false, {
+opcode!(call_nc_u16, 0xD4, "CALL NC,u16", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -365,7 +344,6 @@ opcode!(call_nc_u16, 0xD4, "CALL NC,u16", false, {
 		if state.registers.get_carry() {
 			state.registers.take_mem();
 			state.registers.take_hold();
-			state.registers.opcode_bytecount = Some(3);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -382,12 +360,11 @@ opcode!(call_nc_u16, 0xD4, "CALL NC,u16", false, {
 	5 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(call_z_u16, 0xCC, "CALL Z,u16", false, {
+opcode!(call_z_u16, 0xCC, "CALL Z,u16", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -402,7 +379,6 @@ opcode!(call_z_u16, 0xCC, "CALL Z,u16", false, {
 		if !state.registers.get_zero() {
 			state.registers.take_mem();
 			state.registers.take_hold();
-			state.registers.opcode_bytecount = Some(3);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -419,12 +395,11 @@ opcode!(call_z_u16, 0xCC, "CALL Z,u16", false, {
 	5 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(call_c_u16, 0xDC, "CALL C,u16", false, {
+opcode!(call_c_u16, 0xDC, "CALL C,u16", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -439,7 +414,6 @@ opcode!(call_c_u16, 0xDC, "CALL C,u16", false, {
 		if !state.registers.get_carry() {
 			state.registers.take_mem();
 			state.registers.take_hold();
-			state.registers.opcode_bytecount = Some(3);
 			CycleResult::Finished
 		} else {
 			CycleResult::NeedsMore
@@ -456,12 +430,11 @@ opcode!(call_c_u16, 0xDC, "CALL C,u16", false, {
 	5 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(ret, 0xC9, "RET", false, {
+opcode!(ret, 0xC9, "RET", false, 1, {
 	0 => {
 		state.cpu_pop_stack();
 		CycleResult::NeedsMore
@@ -478,12 +451,11 @@ opcode!(ret, 0xC9, "RET", false, {
 	3 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(reti, 0xD9, "RETI", false, {
+opcode!(reti, 0xD9, "RETI", false, 1, {
 	0 => {
 		state.cpu_pop_stack();
 		CycleResult::NeedsMore
@@ -501,18 +473,16 @@ opcode!(reti, 0xD9, "RETI", false, {
 		state.interrupts.ime = true;
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(ret_nz, 0xC0, "RET NZ", false, {
+opcode!(ret_nz, 0xC0, "RET NZ", false, 1, {
 	0 => {
 		CycleResult::NeedsMore
 	},
 	1 => {
 		if state.registers.get_zero() {
-			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		} else {
 			state.cpu_pop_stack();
@@ -531,18 +501,16 @@ opcode!(ret_nz, 0xC0, "RET NZ", false, {
 	4 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(ret_nc, 0xD0, "RET NC", false, {
+opcode!(ret_nc, 0xD0, "RET NC", false, 1, {
 	0 => {
 		CycleResult::NeedsMore
 	},
 	1 => {
 		if state.registers.get_carry() {
-			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		} else {
 			state.cpu_pop_stack();
@@ -561,18 +529,16 @@ opcode!(ret_nc, 0xD0, "RET NC", false, {
 	4 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(ret_z, 0xC8, "RET Z", false, {
+opcode!(ret_z, 0xC8, "RET Z", false, 1, {
 	0 => {
 		CycleResult::NeedsMore
 	},
 	1 => {
 		if !state.registers.get_zero() {
-			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		} else {
 			state.cpu_pop_stack();
@@ -591,18 +557,16 @@ opcode!(ret_z, 0xC8, "RET Z", false, {
 	4 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
-opcode!(ret_c, 0xD8, "RET C", false, {
+opcode!(ret_c, 0xD8, "RET C", false, 1, {
 	0 => {
 		CycleResult::NeedsMore
 	},
 	1 => {
 		if !state.registers.get_carry() {
-			state.registers.opcode_bytecount = Some(1);
 			CycleResult::Finished
 		} else {
 			state.cpu_pop_stack();
@@ -621,15 +585,14 @@ opcode!(ret_c, 0xD8, "RET C", false, {
 	4 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.registers.pc = address;
-		state.registers.opcode_bytecount = Some(0);
-		CycleResult::Finished
+		CycleResult::FinishedKeepPc
 	}
 });
 
 macro_rules! define_rst {
 	($op:literal, $addr:literal) => {
 		paste::paste! {
-			opcode!([<rst_ $addr>], $op, std::concat!("RST ", std::stringify!($addr)), false, {
+			opcode!([<rst_ $addr>], $op, std::concat!("RST ", std::stringify!($addr)), false, 1, {
 				0 => {
 					CycleResult::NeedsMore
 				},
@@ -643,8 +606,7 @@ macro_rules! define_rst {
 				},
 				3 => {
 					state.registers.pc = $addr;
-					state.registers.opcode_bytecount = Some(0);
-					CycleResult::Finished
+					CycleResult::FinishedKeepPc
 				}
 			});
 		}

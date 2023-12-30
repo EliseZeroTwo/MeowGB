@@ -5,7 +5,7 @@ use crate::gameboy::{cpu::CycleResult, Gameboy};
 macro_rules! define_ld_reg_imm_u16 {
 	($op:literal, $reg:ident) => {
 		paste::paste! {
-			opcode!([<ld_ $reg _imm_u16>], $op, std::concat!("LD ", std::stringify!($reg), ",u16"), false, {
+			opcode!([<ld_ $reg _imm_u16>], $op, std::concat!("LD ", std::stringify!($reg), ",u16"), false, 3, {
 				0 => {
 					state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 					CycleResult::NeedsMore
@@ -23,7 +23,6 @@ macro_rules! define_ld_reg_imm_u16 {
 					reg &= 0xFF;
 					reg |= (state.registers.take_mem() as u16) << 8;
 					state.registers.[<set_ $reg>](reg);
-					state.registers.opcode_bytecount = Some(3);
 					CycleResult::Finished
 				}
 			});
@@ -36,7 +35,7 @@ define_ld_reg_imm_u16!(0x11, de);
 define_ld_reg_imm_u16!(0x21, hl);
 define_ld_reg_imm_u16!(0x31, sp);
 
-opcode!(ld_sp_hl, 0xF9, "LD SP,HL", false, {
+opcode!(ld_sp_hl, 0xF9, "LD SP,HL", false, 1, {
 		0 => {
 			state.registers.sp &= 0xFF00;
 			state.registers.sp |= state.registers.l as u16;
@@ -45,12 +44,11 @@ opcode!(ld_sp_hl, 0xF9, "LD SP,HL", false, {
 		1 => {
 			state.registers.sp &= 0xFF;
 			state.registers.sp |= (state.registers.h as u16) << 8;
-			state.registers.opcode_bytecount = Some(3);
 			CycleResult::Finished
 		}
 });
 
-opcode!(ld_deref_imm_u16_sp, 0x08, "LD (u16),SP", false, {
+opcode!(ld_deref_imm_u16_sp, 0x08, "LD (u16),SP", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -70,7 +68,6 @@ opcode!(ld_deref_imm_u16_sp, 0x08, "LD (u16),SP", false, {
 	3 => {
 		let addr = state.registers.take_hold().overflowing_add(1).0;
 		state.cpu_write_u8(addr, (state.registers.sp >> 8) as u8);
-		state.registers.opcode_bytecount = Some(3);
 		CycleResult::Finished
 	}
 });
@@ -78,11 +75,10 @@ opcode!(ld_deref_imm_u16_sp, 0x08, "LD (u16),SP", false, {
 macro_rules! define_ld_reg_reg {
 	($opcode:literal, $lreg:ident, $rreg:ident) => {
 		paste::paste! {
-			opcode!([<ld_ $lreg _ $rreg>], $opcode, std::concat!("LD ", std::stringify!($lreg), ",", std::stringify!($rreg)), false, {
+			opcode!([<ld_ $lreg _ $rreg>], $opcode, std::concat!("LD ", std::stringify!($lreg), ",", std::stringify!($rreg)), false, 1, {
 					0 => {
 						let res = state.registers.$rreg;
 						state.registers.$lreg = res;
-						state.registers.opcode_bytecount = Some(1);
 						CycleResult::Finished
 					}
 			});
@@ -143,14 +139,13 @@ define_ld_reg_reg!(0x7F, a, a);
 macro_rules! define_ld_reg_deref {
 	($op:literal, $lreg:ident, $rreg:ident) => {
 		paste::paste! {
-			opcode!([<ld_ $lreg _deref_ $rreg>], $op, std::concat!("LD ", std::stringify!($lreg), ",(", std::stringify!($rreg), ")"), false, {
+			opcode!([<ld_ $lreg _deref_ $rreg>], $op, std::concat!("LD ", std::stringify!($lreg), ",(", std::stringify!($rreg), ")"), false, 1, {
 				0 => {
 					state.cpu_read_u8(state.registers.[<get_ $rreg>]());
 					CycleResult::NeedsMore
 				},
 				1 => {
 					state.registers.$lreg = state.registers.take_mem();
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
 			});
@@ -168,29 +163,27 @@ define_ld_reg_deref!(0x7E, a, hl);
 define_ld_reg_deref!(0x0A, a, bc);
 define_ld_reg_deref!(0x1A, a, de);
 
-opcode!(ld_deref_bc_a, 0x02, "LD (BC),A", false, {
+opcode!(ld_deref_bc_a, 0x02, "LD (BC),A", false, 1, {
 	0 => {
 		state.cpu_write_u8(state.registers.get_bc(), state.registers.a);
 		CycleResult::NeedsMore
 	},
 	1 => {
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(ld_deref_de_a, 0x12, "LD (DE),A", false, {
+opcode!(ld_deref_de_a, 0x12, "LD (DE),A", false, 1, {
 	0 => {
 		state.cpu_write_u8(state.registers.get_de(), state.registers.a);
 		CycleResult::NeedsMore
 	},
 	1 => {
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(ld_hl_plus_a, 0x22, "LD (HL+),A", false, {
+opcode!(ld_hl_plus_a, 0x22, "LD (HL+),A", false, 1, {
 	0 => {
 		state.cpu_write_u8(state.registers.get_hl(), state.registers.a);
 		CycleResult::NeedsMore
@@ -198,12 +191,11 @@ opcode!(ld_hl_plus_a, 0x22, "LD (HL+),A", false, {
 	1 => {
 		let reg = state.registers.get_hl().overflowing_add(1).0;
 		state.registers.set_hl(reg);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(ld_hl_minus_a, 0x32, "LD (HL-),A", false, {
+opcode!(ld_hl_minus_a, 0x32, "LD (HL-),A", false, 1, {
 	0 => {
 		state.cpu_write_u8(state.registers.get_hl(), state.registers.a);
 		CycleResult::NeedsMore
@@ -211,12 +203,11 @@ opcode!(ld_hl_minus_a, 0x32, "LD (HL-),A", false, {
 	1 => {
 		let reg = state.registers.get_hl().overflowing_sub(1).0;
 		state.registers.set_hl(reg);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(ld_a_hl_plus, 0x2A, "LD A,(HL+)", false, {
+opcode!(ld_a_hl_plus, 0x2A, "LD A,(HL+)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -225,12 +216,11 @@ opcode!(ld_a_hl_plus, 0x2A, "LD A,(HL+)", false, {
 		state.registers.a = state.registers.take_mem();
 		let reg = state.registers.get_hl().overflowing_add(1).0;
 		state.registers.set_hl(reg);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(ld_a_hl_minus, 0x3A, "LD A,(HL-)", false, {
+opcode!(ld_a_hl_minus, 0x3A, "LD A,(HL-)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -239,12 +229,11 @@ opcode!(ld_a_hl_minus, 0x3A, "LD A,(HL-)", false, {
 		state.registers.a = state.registers.take_mem();
 		let reg = state.registers.get_hl().overflowing_sub(1).0;
 		state.registers.set_hl(reg);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(ld_hl_sp_i8, 0xF8, "LD HL,SP+i8", false, {
+opcode!(ld_hl_sp_i8, 0xF8, "LD HL,SP+i8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -266,7 +255,6 @@ opcode!(ld_hl_sp_i8, 0xF8, "LD HL,SP+i8", false, {
 		CycleResult::NeedsMore
 	},
 	2 => {
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
@@ -274,14 +262,13 @@ opcode!(ld_hl_sp_i8, 0xF8, "LD HL,SP+i8", false, {
 macro_rules! define_ld_reg_imm_u8 {
 	($op:literal, $lreg:ident) => {
 		paste::paste! {
-			opcode!([<ld_ $lreg _imm_u8>], $op, std::concat!("LD ", std::stringify!($lreg), ",u8"), false, {
+			opcode!([<ld_ $lreg _imm_u8>], $op, std::concat!("LD ", std::stringify!($lreg), ",u8"), false, 2, {
 				0 => {
 					state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 					CycleResult::NeedsMore
 				},
 				1 => {
 					state.registers.$lreg = state.registers.take_mem();
-					state.registers.opcode_bytecount = Some(2);
 					CycleResult::Finished
 				}
 			});
@@ -297,7 +284,7 @@ define_ld_reg_imm_u8!(0x26, h);
 define_ld_reg_imm_u8!(0x2E, l);
 define_ld_reg_imm_u8!(0x3E, a);
 
-opcode!(ld_deref_hl_imm_u8, 0x36, "LD (HL),u8", false, {
+opcode!(ld_deref_hl_imm_u8, 0x36, "LD (HL),u8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -305,7 +292,6 @@ opcode!(ld_deref_hl_imm_u8, 0x36, "LD (HL),u8", false, {
 	1 => {
 		let imm = state.registers.take_mem();
 		state.cpu_write_u8(state.registers.get_hl(), imm);
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::NeedsMore
 	},
 	2 => {
@@ -313,7 +299,7 @@ opcode!(ld_deref_hl_imm_u8, 0x36, "LD (HL),u8", false, {
 	}
 });
 
-opcode!(ldh_a_imm_u8, 0xF0, "LDH A,(u8)", false, {
+opcode!(ldh_a_imm_u8, 0xF0, "LDH A,(u8)", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -326,12 +312,11 @@ opcode!(ldh_a_imm_u8, 0xF0, "LDH A,(u8)", false, {
 	},
 	2 => {
 		state.registers.a = state.registers.take_mem();
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
 
-opcode!(ldh_imm_u8_a, 0xE0, "LDH (u8),A", false, {
+opcode!(ldh_imm_u8_a, 0xE0, "LDH (u8),A", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -340,7 +325,6 @@ opcode!(ldh_imm_u8_a, 0xE0, "LDH (u8),A", false, {
 		let imm = state.registers.take_mem();
 		let addr = 0xFF00u16 | imm as u16;
 		state.cpu_write_u8(addr, state.registers.a);
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::NeedsMore
 	},
 	2 => {
@@ -348,7 +332,7 @@ opcode!(ldh_imm_u8_a, 0xE0, "LDH (u8),A", false, {
 	}
 });
 
-opcode!(ldh_a_deref_c, 0xF2, "LDH A,(C)", false, {
+opcode!(ldh_a_deref_c, 0xF2, "LDH A,(C)", false, 1, {
 	0 => {
 		let imm = state.registers.c;
 		let addr = 0xFF00u16 | imm as u16;
@@ -357,16 +341,14 @@ opcode!(ldh_a_deref_c, 0xF2, "LDH A,(C)", false, {
 	},
 	1 => {
 		state.registers.a = state.registers.take_mem();
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(ldh_deref_c_a, 0xE2, "LDH (C),A", false, {
+opcode!(ldh_deref_c_a, 0xE2, "LDH (C),A", false, 1, {
 	0 => {
 		let addr = 0xFF00u16 | state.registers.c as u16;
 		state.cpu_write_u8(addr, state.registers.a);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::NeedsMore
 	},
 	1 => {
@@ -374,7 +356,7 @@ opcode!(ldh_deref_c_a, 0xE2, "LDH (C),A", false, {
 	}
 });
 
-opcode!(ld_a_deref_imm_u16, 0xFA, "LD A,(u16)", false, {
+opcode!(ld_a_deref_imm_u16, 0xFA, "LD A,(u16)", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -392,12 +374,11 @@ opcode!(ld_a_deref_imm_u16, 0xFA, "LD A,(u16)", false, {
 	},
 	3 => {
 		state.registers.a = state.registers.take_mem();
-		state.registers.opcode_bytecount = Some(3);
 		CycleResult::Finished
 	}
 });
 
-opcode!(ld_deref_imm_u16_a, 0xEA, "LD (u16),A", false, {
+opcode!(ld_deref_imm_u16_a, 0xEA, "LD (u16),A", false, 3, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -411,7 +392,6 @@ opcode!(ld_deref_imm_u16_a, 0xEA, "LD (u16),A", false, {
 	2 => {
 		let addr = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 		state.cpu_write_u8(addr, state.registers.a);
-		state.registers.opcode_bytecount = Some(3);
 		CycleResult::NeedsMore
 	},
 	3 => {
@@ -422,10 +402,9 @@ opcode!(ld_deref_imm_u16_a, 0xEA, "LD (u16),A", false, {
 macro_rules! define_ld_deref_hl_reg {
 	($op:literal, $lreg:ident) => {
 		paste::paste! {
-			opcode!([<ld_deref_hl_ $lreg>], $op, std::concat!("LD (HL),", std::stringify!($lreg)), false, {
+			opcode!([<ld_deref_hl_ $lreg>], $op, std::concat!("LD (HL),", std::stringify!($lreg)), false, 1, {
 					0 => {
 						state.cpu_write_u8(state.registers.get_hl(), state.registers.$lreg);
-						state.registers.opcode_bytecount = Some(1);
 						CycleResult::NeedsMore
 					},
 					1 => {
@@ -447,7 +426,7 @@ define_ld_deref_hl_reg!(0x77, a);
 macro_rules! define_push_pop_reg {
 	($push_op:literal, $pop_op:literal, $reg:ident) => {
 		paste::paste! {
-			opcode!([<push_ $reg>], $push_op, std::concat!("PUSH ", std::stringify!($reg)), false, {
+			opcode!([<push_ $reg>], $push_op, std::concat!("PUSH ", std::stringify!($reg)), false, 1, {
 					0 => {
 						CycleResult::NeedsMore
 					},
@@ -457,7 +436,6 @@ macro_rules! define_push_pop_reg {
 					},
 					2 => {
 						state.cpu_push_stack(state.registers.[<get_ $reg>]() as u8);
-						state.registers.opcode_bytecount = Some(1);
 						CycleResult::NeedsMore
 					},
 					3 => {
@@ -465,7 +443,7 @@ macro_rules! define_push_pop_reg {
 					}
 			});
 
-			opcode!([<pop_ $reg>], $pop_op, std::concat!("POP ", std::stringify!($reg)), false, {
+			opcode!([<pop_ $reg>], $pop_op, std::concat!("POP ", std::stringify!($reg)), false, 1, {
 					0 => {
 						state.cpu_pop_stack();
 						CycleResult::NeedsMore
@@ -479,7 +457,6 @@ macro_rules! define_push_pop_reg {
 					2 => {
 						let val = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
 						state.registers.[<set_ $reg>](val);
-						state.registers.opcode_bytecount = Some(1);
 						CycleResult::Finished
 					}
 			});

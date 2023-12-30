@@ -40,7 +40,7 @@ macro_rules! define_flag {
 pub enum CycleResult {
 	NeedsMore,
 	Finished,
-	FinishedChangedPc,
+	FinishedKeepPc,
 }
 
 #[derive(Debug, Default)]
@@ -474,15 +474,15 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		result
 	};
 
-	if result == CycleResult::Finished || result == CycleResult::FinishedChangedPc {
+	if result == CycleResult::Finished || result == CycleResult::FinishedKeepPc {
 		if state.used_halt_bug {
 			state.registers.pc = state.registers.pc.overflowing_add(1).0;
 		}
 
-		if result != CycleResult::FinishedChangedPc {
+		if result == CycleResult::Finished {
 			match state.registers.opcode_bytecount {
 				Some(len) => state.registers.pc = state.registers.pc.overflowing_add(len as u16).0,
-				None => panic!("Forgot to set opcode len"),
+				None => unreachable!("opcode len is missing, which should not be possible"),
 			}
 		}
 

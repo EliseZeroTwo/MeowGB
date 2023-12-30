@@ -51,14 +51,13 @@ pub fn sub(lhs: u8, rhs: u8) -> CarryResult {
 macro_rules! define_xor_reg {
 	($op:literal, $reg:ident) => {
 		paste::paste! {
-			opcode!([<xor_a_ $reg>], $op, std::concat!("XOR A,",std::stringify!($reg)), false, {
+			opcode!([<xor_a_ $reg>], $op, std::concat!("XOR A,",std::stringify!($reg)), false, 1, {
 				0 => {
 					state.registers.a ^= state.registers.$reg;
 					state.registers.set_zero(state.registers.a == 0);
 					state.registers.set_subtract(false);
 					state.registers.set_half_carry(false);
 					state.registers.set_carry(false);
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
 			});
@@ -74,7 +73,7 @@ define_xor_reg!(0xAB, e);
 define_xor_reg!(0xAC, h);
 define_xor_reg!(0xAD, l);
 
-opcode!(xor_a_deref_hl, 0xAE, "XOR A,(HL)", false, {
+opcode!(xor_a_deref_hl, 0xAE, "XOR A,(HL)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -85,12 +84,11 @@ opcode!(xor_a_deref_hl, 0xAE, "XOR A,(HL)", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(false);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(xor_a_imm_u8, 0xEE, "XOR A,u8", false, {
+opcode!(xor_a_imm_u8, 0xEE, "XOR A,u8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc + 1);
 		CycleResult::NeedsMore
@@ -101,7 +99,6 @@ opcode!(xor_a_imm_u8, 0xEE, "XOR A,u8", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(false);
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
@@ -109,7 +106,7 @@ opcode!(xor_a_imm_u8, 0xEE, "XOR A,u8", false, {
 macro_rules! define_sbc_reg {
     ($op:literal, $reg:ident) => {
         paste::paste! {
-            opcode!([<sbc_a_ $reg>], $op, std::concat!("SBC A,", std::stringify!($reg)), false, {
+            opcode!([<sbc_a_ $reg>], $op, std::concat!("SBC A,", std::stringify!($reg)), false, 1, {
 				0 => {
 					let CarryResult { result, half_carry, carry } = sub_with_carry(state.registers.a, state.registers.$reg, state.registers.get_carry());
 
@@ -118,7 +115,6 @@ macro_rules! define_sbc_reg {
 					state.registers.set_subtract(true);
 					state.registers.set_half_carry(half_carry);
 					state.registers.set_carry(carry);
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
             });
@@ -134,7 +130,7 @@ define_sbc_reg!(0x9B, e);
 define_sbc_reg!(0x9C, h);
 define_sbc_reg!(0x9D, l);
 
-opcode!(sbc_a_deref_hl, 0x9E, "SBC A,(HL)", false, {
+opcode!(sbc_a_deref_hl, 0x9E, "SBC A,(HL)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -151,12 +147,11 @@ opcode!(sbc_a_deref_hl, 0x9E, "SBC A,(HL)", false, {
 		state.registers.set_subtract(true);
 		state.registers.set_half_carry(half_carry);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(sbc_a_imm_u8, 0xDE, "SBC A,u8", false, {
+opcode!(sbc_a_imm_u8, 0xDE, "SBC A,u8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc + 1);
 		CycleResult::NeedsMore
@@ -173,7 +168,6 @@ opcode!(sbc_a_imm_u8, 0xDE, "SBC A,u8", false, {
 		state.registers.set_subtract(true);
 		state.registers.set_half_carry(half_carry);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
@@ -181,7 +175,7 @@ opcode!(sbc_a_imm_u8, 0xDE, "SBC A,u8", false, {
 macro_rules! define_add_reg {
     ($op:literal, $reg:ident) => {
         paste::paste! {
-            opcode!([<add_a_ $reg>], $op, std::concat!("ADD A,", std::stringify!($reg)), false, {
+            opcode!([<add_a_ $reg>], $op, std::concat!("ADD A,", std::stringify!($reg)), false, 1, {
                     0 => {
                         let CarryResult { result, half_carry, carry } = add(state.registers.a, state.registers.$reg);
 
@@ -190,7 +184,6 @@ macro_rules! define_add_reg {
                         state.registers.set_subtract(false);
                         state.registers.set_half_carry(half_carry);
                         state.registers.set_carry(carry);
-                        state.registers.opcode_bytecount = Some(1);
                         CycleResult::Finished
                     }
             });
@@ -206,7 +199,7 @@ define_add_reg!(0x83, e);
 define_add_reg!(0x84, h);
 define_add_reg!(0x85, l);
 
-opcode!(add_a_deref_hl, 0x86, "ADD A,(HL)", false, {
+opcode!(add_a_deref_hl, 0x86, "ADD A,(HL)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -220,12 +213,11 @@ opcode!(add_a_deref_hl, 0x86, "ADD A,(HL)", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(half_carry);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(add_a_imm_u8, 0xC6, "ADD A,u8", false, {
+opcode!(add_a_imm_u8, 0xC6, "ADD A,u8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc + 1);
 		CycleResult::NeedsMore
@@ -239,7 +231,6 @@ opcode!(add_a_imm_u8, 0xC6, "ADD A,u8", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(half_carry);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
@@ -247,7 +238,7 @@ opcode!(add_a_imm_u8, 0xC6, "ADD A,u8", false, {
 macro_rules! define_adc_reg {
     ($op:literal, $reg:ident) => {
         paste::paste! {
-		opcode!([<adc_a_ $reg>], $op, std::concat!("ADC A,", std::stringify!($reg)), false, {
+		opcode!([<adc_a_ $reg>], $op, std::concat!("ADC A,", std::stringify!($reg)), false, 1, {
 				0 => {
 					let CarryResult { result, half_carry, carry } = add_with_carry(state.registers.a, state.registers.$reg, state.registers.get_carry());
 
@@ -256,7 +247,6 @@ macro_rules! define_adc_reg {
 					state.registers.set_subtract(false);
 					state.registers.set_half_carry(half_carry);
 					state.registers.set_carry(carry);
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
 			});
@@ -272,7 +262,7 @@ define_adc_reg!(0x8B, e);
 define_adc_reg!(0x8C, h);
 define_adc_reg!(0x8D, l);
 
-opcode!(adc_a_deref_hl, 0x8E, "ADC A,(HL)", false, {
+opcode!(adc_a_deref_hl, 0x8E, "ADC A,(HL)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -289,12 +279,11 @@ opcode!(adc_a_deref_hl, 0x8E, "ADC A,(HL)", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(half_carry);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(adc_a_imm_u8, 0xCE, "ADC A,u8", false, {
+opcode!(adc_a_imm_u8, 0xCE, "ADC A,u8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc + 1);
 		CycleResult::NeedsMore
@@ -311,7 +300,6 @@ opcode!(adc_a_imm_u8, 0xCE, "ADC A,u8", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(half_carry);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
@@ -319,7 +307,7 @@ opcode!(adc_a_imm_u8, 0xCE, "ADC A,u8", false, {
 macro_rules! define_sub_reg {
     ($op:literal, $reg:ident) => {
         paste::paste! {
-            opcode!([<sub_a_ $reg>], $op, std::concat!("SUB A,", std::stringify!($reg)), false, {
+            opcode!([<sub_a_ $reg>], $op, std::concat!("SUB A,", std::stringify!($reg)), false, 1, {
 				0 => {
 					let CarryResult { result, half_carry, carry } = sub(state.registers.a, state.registers.$reg);
 
@@ -328,7 +316,6 @@ macro_rules! define_sub_reg {
 					state.registers.set_subtract(true);
 					state.registers.set_half_carry(half_carry);
 					state.registers.set_carry(carry);
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
             });
@@ -344,7 +331,7 @@ define_sub_reg!(0x93, e);
 define_sub_reg!(0x94, h);
 define_sub_reg!(0x95, l);
 
-opcode!(sub_a_deref_hl, 0x96, "SUB A,(HL)", false, {
+opcode!(sub_a_deref_hl, 0x96, "SUB A,(HL)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -358,12 +345,11 @@ opcode!(sub_a_deref_hl, 0x96, "SUB A,(HL)", false, {
 		state.registers.set_subtract(true);
 		state.registers.set_half_carry(half_carry);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(sub_a_imm_u8, 0xD6, "SUB A,u8", false, {
+opcode!(sub_a_imm_u8, 0xD6, "SUB A,u8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc + 1);
 		CycleResult::NeedsMore
@@ -377,7 +363,6 @@ opcode!(sub_a_imm_u8, 0xD6, "SUB A,u8", false, {
 		state.registers.set_subtract(true);
 		state.registers.set_half_carry(half_carry);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
@@ -385,7 +370,7 @@ opcode!(sub_a_imm_u8, 0xD6, "SUB A,u8", false, {
 macro_rules! define_inc_reg {
 	($op:literal, $reg:ident) => {
 		paste::paste! {
-			opcode!([<inc_ $reg>], $op, std::concat!("INC ", std::stringify!($reg)), false, {
+			opcode!([<inc_ $reg>], $op, std::concat!("INC ", std::stringify!($reg)), false, 1, {
 				0 => {
 					let CarryResult { result, half_carry, .. } = add(
 						state.registers.$reg,
@@ -396,7 +381,6 @@ macro_rules! define_inc_reg {
 					state.registers.set_zero(result == 0);
 					state.registers.set_subtract(false);
 					state.registers.set_half_carry(half_carry);
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
 			});
@@ -412,7 +396,7 @@ define_inc_reg!(0x24, h);
 define_inc_reg!(0x2C, l);
 define_inc_reg!(0x3C, a);
 
-opcode!(inc_deref_hl, 0x34, "INC (HL)", false, {
+opcode!(inc_deref_hl, 0x34, "INC (HL)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -424,7 +408,6 @@ opcode!(inc_deref_hl, 0x34, "INC (HL)", false, {
 		state.registers.set_zero(result == 0);
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(half_carry);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::NeedsMore
 	},
 	2 => {
@@ -435,7 +418,7 @@ opcode!(inc_deref_hl, 0x34, "INC (HL)", false, {
 macro_rules! define_dec_reg {
 	($op:literal, $reg:ident) => {
 		paste::paste! {
-			opcode!([<dec_ $reg>], $op, std::concat!("DEC ", std::stringify!($reg)), false, {
+			opcode!([<dec_ $reg>], $op, std::concat!("DEC ", std::stringify!($reg)), false, 1, {
 				0 => {
 					let CarryResult { result, half_carry, .. } = sub(
 						state.registers.$reg,
@@ -446,7 +429,6 @@ macro_rules! define_dec_reg {
 					state.registers.set_zero(result == 0);
 					state.registers.set_subtract(true);
 					state.registers.set_half_carry(half_carry);
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
 			});
@@ -462,7 +444,7 @@ define_dec_reg!(0x25, h);
 define_dec_reg!(0x2D, l);
 define_dec_reg!(0x3D, a);
 
-opcode!(dec_deref_hl, 0x35, "DEC (HL)", false, {
+opcode!(dec_deref_hl, 0x35, "DEC (HL)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -474,7 +456,6 @@ opcode!(dec_deref_hl, 0x35, "DEC (HL)", false, {
 		state.registers.set_zero(result == 0);
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(half_carry);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::NeedsMore
 	},
 	2 => {
@@ -482,7 +463,7 @@ opcode!(dec_deref_hl, 0x35, "DEC (HL)", false, {
 	}
 });
 
-opcode!(rla, 0x17, "RLA", false, {
+opcode!(rla, 0x17, "RLA", false, 1, {
 	0 => {
 		let carry = state.registers.a >> 7 == 1;
 		state.registers.a <<= 1;
@@ -496,12 +477,11 @@ opcode!(rla, 0x17, "RLA", false, {
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(carry);
 
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(rra, 0x1f, "RRA", false, {
+opcode!(rra, 0x1f, "RRA", false, 1, {
 	0 => {
 		let carry = state.registers.a & 0b1 == 1;
 		state.registers.a >>= 1;
@@ -515,7 +495,6 @@ opcode!(rra, 0x1f, "RRA", false, {
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(carry);
 
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
@@ -523,7 +502,7 @@ opcode!(rra, 0x1f, "RRA", false, {
 macro_rules! define_inc_u16_reg {
 	($op:literal, $lreg:ident, $rreg:ident) => {
 		paste::paste! {
-			opcode!([<inc_ $lreg $rreg>], $op, std::concat!("INC ", std::stringify!($lreg), std::stringify!($rreg)), false, {
+			opcode!([<inc_ $lreg $rreg>], $op, std::concat!("INC ", std::stringify!($lreg), std::stringify!($rreg)), false, 1, {
 				0 => {
 					let (res, carry) = state.registers.$rreg.overflowing_add(1);
 					state.registers.$rreg = res;
@@ -535,7 +514,6 @@ macro_rules! define_inc_u16_reg {
 						let (res, _) = state.registers.$lreg.overflowing_add(1);
 						state.registers.$lreg = res;
 					}
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
 			});
@@ -547,14 +525,13 @@ define_inc_u16_reg!(0x03, b, c);
 define_inc_u16_reg!(0x13, d, e);
 define_inc_u16_reg!(0x23, h, l);
 
-opcode!(inc_sp, 0x33, "INC SP", false, {
+opcode!(inc_sp, 0x33, "INC SP", false, 1, {
 	0 => {
 		CycleResult::NeedsMore
 	},
 	1 => {
 		let (res, _) = state.registers.sp.overflowing_add(1);
 		state.registers.sp = res;
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
@@ -562,7 +539,7 @@ opcode!(inc_sp, 0x33, "INC SP", false, {
 macro_rules! define_dec_u16_reg {
 	($op:literal, $lreg:ident, $rreg:ident) => {
 		paste::paste! {
-			opcode!([<dec_ $lreg $rreg>], $op, std::concat!("DEC ", std::stringify!($lreg), std::stringify!($rreg)), false, {
+			opcode!([<dec_ $lreg $rreg>], $op, std::concat!("DEC ", std::stringify!($lreg), std::stringify!($rreg)), false, 1, {
 				0 => {
 					let (res, carry) = state.registers.$rreg.overflowing_sub(1);
 					state.registers.$rreg = res;
@@ -574,7 +551,6 @@ macro_rules! define_dec_u16_reg {
 						let (res, _) = state.registers.$lreg.overflowing_sub(1);
 						state.registers.$lreg = res;
 					}
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
 			});
@@ -586,14 +562,13 @@ define_dec_u16_reg!(0x0B, b, c);
 define_dec_u16_reg!(0x1B, d, e);
 define_dec_u16_reg!(0x2B, h, l);
 
-opcode!(dec_sp, 0x3B, "DEC SP", false, {
+opcode!(dec_sp, 0x3B, "DEC SP", false, 1, {
 	0 => {
 		CycleResult::NeedsMore
 	},
 	1 => {
 		let (res, _) = state.registers.sp.overflowing_sub(1);
 		state.registers.sp = res;
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
@@ -601,14 +576,13 @@ opcode!(dec_sp, 0x3B, "DEC SP", false, {
 macro_rules! define_cp_reg_reg {
 	($op:literal, $lreg:ident, $rreg:ident) => {
 		paste::paste! {
-			opcode!([<cp_ $lreg _ $rreg>], $op, std::concat!("CP ", std::stringify!($lreg), ",", std::stringify!($rreg)), false, {
+			opcode!([<cp_ $lreg _ $rreg>], $op, std::concat!("CP ", std::stringify!($lreg), ",", std::stringify!($rreg)), false, 1, {
 				0 => {
 					let CarryResult { result, half_carry, carry } = sub(state.registers.$lreg, state.registers.$rreg);
 					state.registers.set_zero(result == 0);
 					state.registers.set_subtract(true);
 					state.registers.set_half_carry(half_carry);
 					state.registers.set_carry(carry);
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
 			});
@@ -624,7 +598,7 @@ define_cp_reg_reg!(0xBC, a, h);
 define_cp_reg_reg!(0xBD, a, l);
 define_cp_reg_reg!(0xBF, a, a);
 
-opcode!(cp_a_imm_u8, 0xFE, "CP A,u8", false, {
+opcode!(cp_a_imm_u8, 0xFE, "CP A,u8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc.overflowing_add(1).0);
 		CycleResult::NeedsMore
@@ -636,12 +610,11 @@ opcode!(cp_a_imm_u8, 0xFE, "CP A,u8", false, {
 		state.registers.set_subtract(true);
 		state.registers.set_half_carry(half_carry);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
 
-opcode!(cp_a_deref_hl, 0xBE, "CP A,(HL)", false, {
+opcode!(cp_a_deref_hl, 0xBE, "CP A,(HL)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -653,7 +626,6 @@ opcode!(cp_a_deref_hl, 0xBE, "CP A,(HL)", false, {
 		state.registers.set_subtract(true);
 		state.registers.set_half_carry(half_carry);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
@@ -661,7 +633,7 @@ opcode!(cp_a_deref_hl, 0xBE, "CP A,(HL)", false, {
 macro_rules! define_or_reg {
 	($op:literal, $reg:ident) => {
 		paste::paste! {
-			opcode!([<or_a_ $reg>], $op, std::concat!("OR A,", std::stringify!($reg)), false, {
+			opcode!([<or_a_ $reg>], $op, std::concat!("OR A,", std::stringify!($reg)), false, 1, {
 					0 => {
 						let result = state.registers.a | state.registers.$reg;
 
@@ -670,7 +642,6 @@ macro_rules! define_or_reg {
 						state.registers.set_subtract(false);
 						state.registers.set_half_carry(false);
 						state.registers.set_carry(false);
-						state.registers.opcode_bytecount = Some(1);
 						CycleResult::Finished
 					}
 			});
@@ -686,7 +657,7 @@ define_or_reg!(0xB3, e);
 define_or_reg!(0xB4, h);
 define_or_reg!(0xB5, l);
 
-opcode!(or_a_deref_hl, 0xB6, "OR A,(HL)", false, {
+opcode!(or_a_deref_hl, 0xB6, "OR A,(HL)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -699,12 +670,11 @@ opcode!(or_a_deref_hl, 0xB6, "OR A,(HL)", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(false);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(or_a_imm_u8, 0xF6, "OR A,u8", false, {
+opcode!(or_a_imm_u8, 0xF6, "OR A,u8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc + 1);
 		CycleResult::NeedsMore
@@ -717,7 +687,6 @@ opcode!(or_a_imm_u8, 0xF6, "OR A,u8", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(false);
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
@@ -725,7 +694,7 @@ opcode!(or_a_imm_u8, 0xF6, "OR A,u8", false, {
 macro_rules! define_and_reg {
 	($op:literal, $reg:ident) => {
 		paste::paste! {
-			opcode!([<and_a_ $reg>], $op, std::concat!("AND A,", std::stringify!($reg)), false, {
+			opcode!([<and_a_ $reg>], $op, std::concat!("AND A,", std::stringify!($reg)), false, 1, {
 				0 => {
 					let result = state.registers.a & state.registers.$reg;
 
@@ -734,7 +703,6 @@ macro_rules! define_and_reg {
 					state.registers.set_subtract(false);
 					state.registers.set_half_carry(true);
 					state.registers.set_carry(false);
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
 			});
@@ -750,7 +718,7 @@ define_and_reg!(0xA3, e);
 define_and_reg!(0xA4, h);
 define_and_reg!(0xA5, l);
 
-opcode!(and_a_deref_hl, 0xA6, "AND A,(hl)", false, {
+opcode!(and_a_deref_hl, 0xA6, "AND A,(hl)", false, 1, {
 	0 => {
 		state.cpu_read_u8(state.registers.get_hl());
 		CycleResult::NeedsMore
@@ -763,12 +731,11 @@ opcode!(and_a_deref_hl, 0xA6, "AND A,(hl)", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(true);
 		state.registers.set_carry(false);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(and_a_imm_u8, 0xE6, "AND A,u8", false, {
+opcode!(and_a_imm_u8, 0xE6, "AND A,u8", false, 2, {
 	0 => {
 		state.cpu_read_u8(state.registers.pc + 1);
 		CycleResult::NeedsMore
@@ -781,37 +748,33 @@ opcode!(and_a_imm_u8, 0xE6, "AND A,u8", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(true);
 		state.registers.set_carry(false);
-		state.registers.opcode_bytecount = Some(2);
 		CycleResult::Finished
 	}
 });
 
-opcode!(cpl, 0x2F, "CPL", false, {
+opcode!(cpl, 0x2F, "CPL", false, 1, {
 	0 => {
 		state.registers.a = !state.registers.a;
 		state.registers.set_subtract(true);
 		state.registers.set_half_carry(true);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(ccf, 0x3F, "CCF", false, {
+opcode!(ccf, 0x3F, "CCF", false, 1, {
 	0 => {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(!state.registers.get_carry());
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(scf, 0x37, "SCF", false, {
+opcode!(scf, 0x37, "SCF", false, 1, {
 	0 => {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(true);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
@@ -819,7 +782,7 @@ opcode!(scf, 0x37, "SCF", false, {
 macro_rules! define_add_hl_u16_reg {
 	($op:literal, $lreg:ident, $rreg:ident) => {
 		paste::paste! {
-			opcode!([<add_hl_ $lreg $rreg>], $op, std::concat!("ADD HL, ", std::stringify!($lreg), std::stringify!($rreg)), false, {
+			opcode!([<add_hl_ $lreg $rreg>], $op, std::concat!("ADD HL, ", std::stringify!($lreg), std::stringify!($rreg)), false, 1, {
 				0 => {
 					let CarryResult { result, carry, .. } = add(state.registers.l, state.registers.$rreg);
 					state.registers.l = result;
@@ -840,7 +803,6 @@ macro_rules! define_add_hl_u16_reg {
 					}
 
 					state.registers.set_subtract(false);
-					state.registers.opcode_bytecount = Some(1);
 					CycleResult::Finished
 				}
 			});
@@ -851,7 +813,7 @@ macro_rules! define_add_hl_u16_reg {
 define_add_hl_u16_reg!(0x09, b, c);
 define_add_hl_u16_reg!(0x19, d, e);
 define_add_hl_u16_reg!(0x29, h, l);
-opcode!(add_hl_sp, 0x39, "ADD HL, SP", false, {
+opcode!(add_hl_sp, 0x39, "ADD HL, SP", false, 1, {
 	0 => {
 		let CarryResult { result, carry, .. } =
 			add(state.registers.l, state.registers.sp as u8);
@@ -873,12 +835,11 @@ opcode!(add_hl_sp, 0x39, "ADD HL, SP", false, {
 		}
 
 		state.registers.set_subtract(false);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(rlca, 0x7, "RLCA", false, {
+opcode!(rlca, 0x7, "RLCA", false, 1, {
 	0 => {
 		let carry = state.registers.a >> 7 == 1;
 		state.registers.a <<= 1;
@@ -888,12 +849,11 @@ opcode!(rlca, 0x7, "RLCA", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(rrca, 0xF, "RRCA", false, {
+opcode!(rrca, 0xF, "RRCA", false, 1, {
 	0 => {
 		let carry = state.registers.a & 0b1 == 1;
 		state.registers.a >>= 1;
@@ -903,12 +863,11 @@ opcode!(rrca, 0xF, "RRCA", false, {
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(carry);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
 
-opcode!(daa, 0x27, "DAA", false, {
+opcode!(daa, 0x27, "DAA", false, 1, {
 	0 => {
 		let mut value = 0;
 		let mut carry = false;
@@ -930,7 +889,6 @@ opcode!(daa, 0x27, "DAA", false, {
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(carry);
 		state.registers.set_zero(state.registers.a == 0);
-		state.registers.opcode_bytecount = Some(1);
 		CycleResult::Finished
 	}
 });
