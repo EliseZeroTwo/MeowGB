@@ -1,4 +1,4 @@
-use winit::event::VirtualKeyCode;
+use winit::keyboard::KeyCode;
 
 #[derive(Debug, serde::Deserialize, Clone, Copy)]
 pub struct DeemgeeConfig {
@@ -7,24 +7,27 @@ pub struct DeemgeeConfig {
 
 impl DeemgeeConfig {
 	pub fn from_file() -> Self {
-		let mut settings = config::Config::default();
-		settings.merge(config::File::with_name("config")).unwrap();
-		settings.try_into().expect("Config Error")
+		config::Config::builder()
+			.add_source(config::File::with_name("config"))
+			.build()
+			.and_then(config::Config::try_deserialize)
+			.expect("config")
 	}
 }
 
 #[derive(Debug, serde::Deserialize, Clone, Copy)]
 pub struct Bindings {
-	pub a: VirtualKeyCode,
-	pub b: VirtualKeyCode,
-	pub select: VirtualKeyCode,
-	pub start: VirtualKeyCode,
-	pub up: VirtualKeyCode,
-	pub down: VirtualKeyCode,
-	pub left: VirtualKeyCode,
-	pub right: VirtualKeyCode,
+	pub a: KeyCode,
+	pub b: KeyCode,
+	pub select: KeyCode,
+	pub start: KeyCode,
+	pub up: KeyCode,
+	pub down: KeyCode,
+	pub left: KeyCode,
+	pub right: KeyCode,
 
-	pub pause: VirtualKeyCode,
-	pub exit: VirtualKeyCode,
-	pub log_ops: VirtualKeyCode,
+	pub pause: KeyCode,
+	pub exit: KeyCode,
+	pub log_ops: KeyCode,
+	pub dump_memory: KeyCode,
 }

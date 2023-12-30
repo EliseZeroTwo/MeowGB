@@ -1,8 +1,6 @@
 use proc_macro::TokenStream;
-use proc_macro2::Ident;
 use syn::{
-	braced, parse::Parse, parse_macro_input, punctuated::Punctuated, Expr, ExprMacro, LitBool,
-	LitInt, LitStr, Stmt, Token,
+	braced, parse::Parse, parse_macro_input, punctuated::Punctuated, Expr, LitBool, LitInt, Token,
 };
 
 struct OpcodeImpl {
@@ -49,6 +47,8 @@ pub fn opcode(item: TokenStream) -> TokenStream {
 	let OpcodeArgs { name, opcode, readable, extended, implementation } =
 		parse_macro_input!(item as OpcodeArgs);
 
+	let name_s = name.to_string();
+
 	let opcode = opcode.base10_parse::<u8>().expect("Failed to parse opcode as u8");
 
 	let fn_sig = quote::quote! {
@@ -72,7 +72,7 @@ pub fn opcode(item: TokenStream) -> TokenStream {
 	}*/
 
 	let regs = quote::quote! {
-		log::trace!("-- Registers --\nAF: {:04X}\nBC: {:04X}\nDE: {:04X}\nHL: {:04X}\nSP: {:04X}\nPC: {:04X}\nZero: {}\nSubtract: {}\nHalf-Carry: {}\nCarry: {}", state.registers.get_af(), state.registers.get_bc(), state.registers.get_de(), state.registers.get_hl(), state.registers.get_sp(), state.registers.pc, state.registers.get_zero(), state.registers.get_subtract(), state.registers.get_half_carry(), state.registers.get_carry());
+		log::info!("\nSTART OF {}\n-- Registers --\nAF: {:04X}\nBC: {:04X}\nDE: {:04X}\nHL: {:04X}\nSP: {:04X}\nPC: {:04X}\nZero: {}\nSubtract: {}\nHalf-Carry: {}\nCarry: {}\n-- Interrupts --\nIME: {}\nIE VBlank: {}\nIE LCD Stat: {}\nIE Timer: {}\nIE Serial: {}\nIE Joypad: {}\nIF VBlank: {}\nIF LCD Stat: {}\nIF Timer: {}\nIF Serial: {}\nIF Joypad: {}\nEND OF {}", #name_s, state.registers.get_af(), state.registers.get_bc(), state.registers.get_de(), state.registers.get_hl(), state.registers.get_sp(), state.registers.pc, state.registers.get_zero(), state.registers.get_subtract(), state.registers.get_half_carry(), state.registers.get_carry(), state.interrupts.ime, state.interrupts.read_ie_vblank(), state.interrupts.read_ie_lcd_stat(), state.interrupts.read_ie_timer(), state.interrupts.read_ie_serial(), state.interrupts.read_ie_joypad(), state.interrupts.read_if_vblank(), state.interrupts.read_if_lcd_stat(), state.interrupts.read_if_timer(), state.interrupts.read_if_serial(), state.interrupts.read_if_joypad(), #name_s);
 	};
 
 	let match_statement = quote::quote! {

@@ -25,6 +25,7 @@ impl Serial {
 		self.sc & 0b1 == 1
 	}
 
+	#[allow(unused)]
 	pub fn set_side(&mut self, conductor: bool) {
 		self.sc &= !0b1;
 		self.sc |= conductor as u8;
@@ -35,7 +36,7 @@ impl Serial {
 			if self.internal_tick < 128 {
 				self.internal_tick += 1;
 			} else {
-				print!("{}", self.sb as char);
+				std::io::stdout().write_all(&[self.sb]).expect("writing stdout failed");
 				std::io::stdout().flush().expect("flushing stdout failed");
 				self.sb = 0;
 				self.set_transfer_in_process(false);

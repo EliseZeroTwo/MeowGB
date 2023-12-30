@@ -19,6 +19,20 @@ pub fn prefixed_handler(state: &mut Gameboy) -> CycleResult {
 	};
 
 	let res: CycleResult = match opcode {
+		0x00 => rlc_b,
+		0x01 => rlc_c,
+		0x02 => rlc_d,
+		0x03 => rlc_e,
+		0x04 => rlc_h,
+		0x05 => rlc_l,
+		0x07 => rlc_a,
+		0x08 => rrc_b,
+		0x09 => rrc_c,
+		0x0a => rrc_d,
+		0x0b => rrc_e,
+		0x0c => rrc_h,
+		0x0d => rrc_l,
+		0x0f => rrc_a,
 		0x10 => rl_b,
 		0x11 => rl_c,
 		0x12 => rl_d,
@@ -33,6 +47,20 @@ pub fn prefixed_handler(state: &mut Gameboy) -> CycleResult {
 		0x1c => rr_h,
 		0x1d => rr_l,
 		0x1f => rr_a,
+		0x20 => sra_b,
+		0x21 => sra_c,
+		0x22 => sra_d,
+		0x23 => sra_e,
+		0x24 => sra_h,
+		0x25 => sra_l,
+		0x27 => sra_a,
+		0x28 => sla_b,
+		0x29 => sla_c,
+		0x2a => sla_d,
+		0x2b => sla_e,
+		0x2c => sla_h,
+		0x2d => sla_l,
+		0x2f => sla_a,
 		0x30 => swap_b,
 		0x31 => swap_c,
 		0x32 => swap_d,
@@ -240,7 +268,7 @@ pub fn prefixed_handler(state: &mut Gameboy) -> CycleResult {
 		0xFE => set_7_deref_hl,
 		0xFF => set_7_a,
 		unknown => panic!(
-			"Unrecognized prefixed opcode: {:#X}\nRegisters: {:#?}",
+			"Unrecognized prefixed opcode: {:#X}\nRegisters: {:#X?}",
 			unknown, state.registers
 		),
 	}(state);
@@ -351,6 +379,64 @@ define_bit_deref_hl!(0x6e, 5);
 define_bit_deref_hl!(0x76, 6);
 define_bit_deref_hl!(0x7e, 7);
 
+macro_rules! define_rlc_reg {
+	($op:literal, $reg:ident) => {
+		paste::paste! {
+			opcode!([<rlc_ $reg>], $op, std::concat!("RLC ", std::stringify!($reg)), true, {
+					1 => {
+						let carry = state.registers.$reg >> 7 == 1;
+						state.registers.$reg <<= 1;
+						state.registers.$reg |= carry as u8;
+
+						state.registers.set_zero(state.registers.$reg == 0);
+						state.registers.set_subtract(false);
+						state.registers.set_half_carry(false);
+						state.registers.set_carry(carry);
+						state.registers.opcode_bytecount = Some(2);
+						CycleResult::Finished
+					}
+			});
+		}
+	};
+}
+
+define_rlc_reg!(0x00, b);
+define_rlc_reg!(0x01, c);
+define_rlc_reg!(0x02, d);
+define_rlc_reg!(0x03, e);
+define_rlc_reg!(0x04, h);
+define_rlc_reg!(0x05, l);
+define_rlc_reg!(0x07, a);
+
+macro_rules! define_rrc_reg {
+	($op:literal, $reg:ident) => {
+		paste::paste! {
+			opcode!([<rrc_ $reg>], $op, std::concat!("RRC ", std::stringify!($reg)), true, {
+					1 => {
+						let carry = state.registers.$reg & 0b1 == 1;
+						state.registers.$reg >>= 1;
+						state.registers.$reg |= (carry as u8) << 7;
+
+						state.registers.set_zero(state.registers.$reg == 0);
+						state.registers.set_subtract(false);
+						state.registers.set_half_carry(false);
+						state.registers.set_carry(carry);
+						state.registers.opcode_bytecount = Some(2);
+						CycleResult::Finished
+					}
+			});
+		}
+	};
+}
+
+define_rrc_reg!(0x08, b);
+define_rrc_reg!(0x09, c);
+define_rrc_reg!(0x0A, d);
+define_rrc_reg!(0x0B, e);
+define_rrc_reg!(0x0C, h);
+define_rrc_reg!(0x0D, l);
+define_rrc_reg!(0x0F, a);
+
 macro_rules! define_rl_reg {
 	($op:literal, $reg:ident) => {
 		paste::paste! {
@@ -382,6 +468,62 @@ define_rl_reg!(0x13, e);
 define_rl_reg!(0x14, h);
 define_rl_reg!(0x15, l);
 define_rl_reg!(0x17, a);
+
+macro_rules! define_sla_reg {
+	($op:literal, $reg:ident) => {
+		paste::paste! {
+			opcode!([<sla_ $reg>], $op, std::concat!("SLA ", std::stringify!($reg)), true, {
+				1 => {
+					let carry = state.registers.$reg & (0b1 << 7) == 1;
+					state.registers.$reg = ((state.registers.$reg as i8) << 1) as u8;
+
+					state.registers.set_zero(state.registers.$reg == 0);
+					state.registers.set_subtract(false);
+					state.registers.set_half_carry(false);
+					state.registers.set_carry(carry);
+					state.registers.opcode_bytecount = Some(2);
+					CycleResult::Finished
+				}
+			});
+		}
+	};
+}
+
+define_sla_reg!(0x20, b);
+define_sla_reg!(0x21, c);
+define_sla_reg!(0x22, d);
+define_sla_reg!(0x23, e);
+define_sla_reg!(0x24, h);
+define_sla_reg!(0x25, l);
+define_sla_reg!(0x27, a);
+
+macro_rules! define_sra_reg {
+	($op:literal, $reg:ident) => {
+		paste::paste! {
+			opcode!([<sra_ $reg>], $op, std::concat!("SRA ", std::stringify!($reg)), true, {
+				1 => {
+					let carry = state.registers.$reg & 0b1 == 1;
+					state.registers.$reg = ((state.registers.$reg as i8) >> 1) as u8;
+
+					state.registers.set_zero(state.registers.$reg == 0);
+					state.registers.set_subtract(false);
+					state.registers.set_half_carry(false);
+					state.registers.set_carry(carry);
+					state.registers.opcode_bytecount = Some(2);
+					CycleResult::Finished
+				}
+			});
+		}
+	};
+}
+
+define_sra_reg!(0x28, b);
+define_sra_reg!(0x29, c);
+define_sra_reg!(0x2A, d);
+define_sra_reg!(0x2B, e);
+define_sra_reg!(0x2C, h);
+define_sra_reg!(0x2D, l);
+define_sra_reg!(0x2F, a);
 
 macro_rules! define_swap_reg {
 	($op:literal, $reg:ident) => {

@@ -877,3 +877,60 @@ opcode!(add_hl_sp, 0x39, "ADD HL, SP", false, {
 		CycleResult::Finished
 	}
 });
+
+opcode!(rlca, 0x7, "RLCA", false, {
+	0 => {
+		let carry = state.registers.a >> 7 == 1;
+		state.registers.a <<= 1;
+		state.registers.a |= carry as u8;
+
+		state.registers.set_zero(state.registers.a == 0);
+		state.registers.set_subtract(false);
+		state.registers.set_half_carry(false);
+		state.registers.set_carry(carry);
+		state.registers.opcode_bytecount = Some(1);
+		CycleResult::Finished
+	}
+});
+
+opcode!(rrca, 0xF, "RRCA", false, {
+	0 => {
+		let carry = state.registers.a & 0b1 == 1;
+		state.registers.a >>= 1;
+		state.registers.a |= (carry as u8) << 7;
+
+		state.registers.set_zero(state.registers.a == 0);
+		state.registers.set_subtract(false);
+		state.registers.set_half_carry(false);
+		state.registers.set_carry(carry);
+		state.registers.opcode_bytecount = Some(1);
+		CycleResult::Finished
+	}
+});
+
+opcode!(daa, 0x27, "DAA", false, {
+	0 => {
+		let mut value = 0;
+		let mut carry = false;
+
+		if state.registers.get_half_carry() || (!state.registers.get_subtract() && (state.registers.a & 0xF) > 9) {
+			value |= 0x06;
+		}
+
+		if state.registers.get_carry() || (!state.registers.get_subtract() && state.registers.a > 0x99) {
+			value |= 0x60;
+			carry = true;
+		}
+
+		state.registers.a = match state.registers.get_subtract() {
+			true => state.registers.a.wrapping_sub(value),
+			false => state.registers.a.wrapping_add(value)
+		};
+
+		state.registers.set_half_carry(false);
+		state.registers.set_carry(carry);
+		state.registers.set_zero(state.registers.a == 0);
+		state.registers.opcode_bytecount = Some(1);
+		CycleResult::Finished
+	}
+});

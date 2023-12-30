@@ -117,7 +117,7 @@ impl Gameboy {
 	}
 
 	fn log_state(&self) {
-		log::info!("-- Registers --\nAF: {:04X}\nBC: {:04X}\nDE: {:04X}\nHL: {:04X}\nSP: {:04X}\nPC: {:04X}\nZero: {}\nSubtract: {}\nHalf-Carry: {}\nCarry: {}", self.registers.get_af(), self.registers.get_bc(), self.registers.get_de(), self.registers.get_hl(), self.registers.get_sp(), self.registers.pc, self.registers.get_zero(), self.registers.get_subtract(), self.registers.get_half_carry(), self.registers.get_carry());
+		log::info!("\n-- Registers --\nAF: {:04X}\nBC: {:04X}\nDE: {:04X}\nHL: {:04X}\nSP: {:04X}\nPC: {:04X}\nZero: {}\nSubtract: {}\nHalf-Carry: {}\nCarry: {}\n-- Interrupts --\nIME: {}\nIE VBlank: {}\nIE LCD Stat: {}\nIE Timer: {}\nIE Serial: {}\nIE Joypad: {}\nIF VBlank: {}\nIF LCD Stat: {}\nIF Timer: {}\nIF Serial: {}\nIF Joypad: {}\n", self.registers.get_af(), self.registers.get_bc(), self.registers.get_de(), self.registers.get_hl(), self.registers.get_sp(), self.registers.pc, self.registers.get_zero(), self.registers.get_subtract(), self.registers.get_half_carry(), self.registers.get_carry(), self.interrupts.ime, self.interrupts.read_ie_vblank(), self.interrupts.read_ie_lcd_stat(), self.interrupts.read_ie_timer(), self.interrupts.read_ie_serial(), self.interrupts.read_ie_joypad(), self.interrupts.read_if_vblank(), self.interrupts.read_if_lcd_stat(), self.interrupts.read_if_timer(), self.interrupts.read_if_serial(), self.interrupts.read_if_joypad());
 	}
 
 	pub fn tick(&mut self) -> bool {
@@ -189,7 +189,12 @@ impl Gameboy {
 							log::info!("Continuing");
 							exit = false;
 						}
-						"s" | "step" => {
+						"p" | "pause" => {
+							self.single_step = true;
+							log::info!("Single step activated");
+							exit = false;
+						}
+						"s" | "step" | "" => {
 							self.log_next_opcode();
 							exit = false;
 						}
@@ -286,7 +291,7 @@ impl Gameboy {
 			0xFF06 => self.timer.tma,
 			0xFF07 => self.timer.read_tac(),
 			0xFF08..=0xFF0E => 0, // Unused
-			0xFF0F => self.interrupts.interrupt_enable,
+			0xFF0F => self.interrupts.interrupt_flag,
 			0xFF10 => self.sound.nr10,
 			0xFF11 => self.sound.nr11,
 			0xFF12 => self.sound.nr12,
@@ -346,7 +351,7 @@ impl Gameboy {
 			0xFF06 => self.timer.tma = value,
 			0xFF07 => self.timer.write_tac(value),
 			0xFF08..=0xFF0E => {} // Unused
-			0xFF0F => self.interrupts.interrupt_enable = value & 0b1_1111,
+			0xFF0F => self.interrupts.interrupt_flag = value & 0b1_1111,
 			0xFF10 => self.sound.nr10 = value,
 			0xFF11 => self.sound.nr11 = value,
 			0xFF12 => self.sound.nr12 = value,
@@ -401,6 +406,34 @@ impl Gameboy {
 			0xFF71..=0xFF7F => {} // Unused
 			_ => unreachable!("IO Read Invalid"),
 		}
+	}
+
+	pub fn dump_memory(&self) -> [u8; 0xFFFF] {
+		let mut out = [0u8; 0xFFFF];
+
+		for address in 0..0xFFFF {
+			out[address as usize] = match address {
+				0..=0xFF if !self.memory.bootrom_disabled => self.memory.bootrom[address as usize],
+				0..=0x7FFF => match self.cartridge.as_ref() {
+					Some(mapper) => mapper.read_rom_u8(address),
+					None => 0,
+				},
+				0x8000..=0x9FFF => self.ppu.cpu_read_vram(address),
+				0xA000..=0xBFFF => match self.cartridge.as_ref() {
+					Some(mapper) => mapper.read_eram_u8(address),
+					None => 0,
+				},
+				0xC000..=0xDFFF => self.memory.wram[address as usize - 0xC000],
+				0xE000..=0xFDFF => self.memory.wram[address as usize - 0xE000],
+				0xFE00..=0xFE9F => self.ppu.cpu_read_oam(address),
+				0xFEA0..=0xFEFF => 0,
+				0xFF00..=0xFF7F => self.cpu_read_io(address),
+				0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80],
+				0xFFFF => self.interrupts.interrupt_enable,
+			};
+		}
+
+		out
 	}
 
 	fn internal_cpu_read_u8(&self, address: u16) -> u8 {

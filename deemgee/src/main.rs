@@ -8,10 +8,11 @@ use std::{
 };
 
 use argh::FromArgs;
-use chrono::Duration;
+use chrono::{Duration, Utc};
 use gameboy::Gameboy;
 use settings::DeemgeeConfig;
-use window::WindowEvent;
+use sha1::{Digest, Sha1};
+use window::EmulatorWindowEvent;
 
 use crate::window::GameboyEvent;
 
@@ -46,10 +47,13 @@ fn main() {
 	let args: CliArgs = argh::from_env();
 	let config = DeemgeeConfig::from_file();
 
-	let (window_side_tx, gb_side_rx) = channel::<WindowEvent>();
+	let (window_side_tx, gb_side_rx) = channel::<EmulatorWindowEvent>();
 	let (gb_side_tx, window_side_rx) = channel::<GameboyEvent>();
 
-	let jh = std::thread::spawn(move || run_gameboy(config, args, gb_side_rx, gb_side_tx).unwrap());
+	let jh = std::thread::Builder::new()
+		.name(String::from("mewmulator"))
+		.spawn(move || run_gameboy(config, args, gb_side_rx, gb_side_tx).unwrap())
+		.unwrap();
 
 	window::run_window(config, window_side_rx, window_side_tx);
 
@@ -59,7 +63,7 @@ fn main() {
 pub fn run_gameboy(
 	_config: DeemgeeConfig,
 	args: CliArgs,
-	rx: Receiver<WindowEvent>,
+	rx: Receiver<EmulatorWindowEvent>,
 	tx: Sender<GameboyEvent>,
 ) -> Result<(), DmgError> {
 	if !args.bootrom.is_file() {
@@ -78,8 +82,12 @@ pub fn run_gameboy(
 		return Err(DmgError::BootromInvalidSize(bootrom.len() as u64));
 	}
 
-	if sha1::Sha1::from(bootrom.as_slice()).hexdigest().as_str()
-		!= "4ed31ec6b0b175bb109c0eb5fd3d193da823339f"
+	let mut hash_ctx = Sha1::new();
+	hash_ctx.update(&bootrom);
+	let digest = hash_ctx.finalize();
+
+	if digest.as_slice()
+		!= b"\x4e\xd3\x1e\xc6\xb0\xb1\x75\xbb\x10\x9c\x0e\xb5\xfd\x3d\x19\x3d\xa8\x23\x33\x9f"
 	{
 		return Err(DmgError::BootromInvalidHash);
 	}
@@ -103,21 +111,35 @@ pub fn run_gameboy(
 	'outer: loop {
 		while let Ok(event) = rx.try_recv() {
 			match event {
-				window::WindowEvent::AToggle => gameboy.joypad.set_a(!gameboy.joypad.a),
-				window::WindowEvent::BToggle => gameboy.joypad.set_b(!gameboy.joypad.b),
-				window::WindowEvent::SelectToggle => {
+				window::EmulatorWindowEvent::AToggle => gameboy.joypad.set_a(!gameboy.joypad.a),
+				window::EmulatorWindowEvent::BToggle => gameboy.joypad.set_b(!gameboy.joypad.b),
+				window::EmulatorWindowEvent::SelectToggle => {
 					gameboy.joypad.set_select(!gameboy.joypad.select)
 				}
-				window::WindowEvent::StartToggle => gameboy.joypad.set_start(!gameboy.joypad.start),
-				window::WindowEvent::UpToggle => gameboy.joypad.set_up(!gameboy.joypad.up),
-				window::WindowEvent::DownToggle => gameboy.joypad.set_down(!gameboy.joypad.down),
-				window::WindowEvent::LeftToggle => gameboy.joypad.set_left(!gameboy.joypad.left),
-				window::WindowEvent::RightToggle => gameboy.joypad.set_right(!gameboy.joypad.right),
-				window::WindowEvent::PauseToggle => paused = !paused,
-				window::WindowEvent::LogToggle => {
+				window::EmulatorWindowEvent::StartToggle => {
+					gameboy.joypad.set_start(!gameboy.joypad.start)
+				}
+				window::EmulatorWindowEvent::UpToggle => gameboy.joypad.set_up(!gameboy.joypad.up),
+				window::EmulatorWindowEvent::DownToggle => {
+					gameboy.joypad.set_down(!gameboy.joypad.down)
+				}
+				window::EmulatorWindowEvent::LeftToggle => {
+					gameboy.joypad.set_left(!gameboy.joypad.left)
+				}
+				window::EmulatorWindowEvent::RightToggle => {
+					gameboy.joypad.set_right(!gameboy.joypad.right)
+				}
+				window::EmulatorWindowEvent::PauseToggle => paused = !paused,
+				window::EmulatorWindowEvent::LogToggle => {
 					gameboy.log_instructions = !gameboy.log_instructions
 				}
-				window::WindowEvent::Exit => break 'outer,
+				window::EmulatorWindowEvent::Exit => break 'outer,
+				window::EmulatorWindowEvent::DumpMemory => {
+					let timestamp = Utc::now().timestamp();
+					let contents = gameboy.dump_memory();
+					std::fs::write(format!("./memdump-{}.bin", timestamp), contents)
+						.expect("Failed to write memory dump");
+				}
 			}
 		}
 

@@ -477,7 +477,6 @@ opcode!(ret, 0xC9, "RET", false, {
 	},
 	3 => {
 		let address = (state.registers.take_mem() as u16) << 8 | state.registers.take_hold();
-		println!("RET to {:#04X}", address);
 		state.registers.pc = address;
 		state.registers.opcode_bytecount = Some(0);
 		CycleResult::Finished

@@ -5,6 +5,7 @@ macro_rules! define_bitfield_u8_gs {
 				((self.$loc >> $offset) & 0b1) == 1
 			}
 
+			#[allow(unused)]
 			pub fn [<write_ $name>](&mut self, value: bool) {
 				log::debug!(std::concat!("Setting ", std::stringify!($name), " to {}"), value);
 				self.$loc &= !(0b1 << $offset);

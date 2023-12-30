@@ -66,6 +66,7 @@ impl MBC1 {
 		self.rom_bank_count > 4
 	}
 
+	#[allow(unused)]
 	fn is_large_ram(&self) -> bool {
 		self.ram_bank_count > 2
 	}
@@ -98,16 +99,16 @@ impl Mapper for MBC1 {
 		}
 	}
 
-	fn read_eram_u8(&self, address: u16) -> u8 {
+	fn read_eram_u8(&self, _address: u16) -> u8 {
 		match self.ram.as_ref() {
-			Some(ram) => unimplemented!(),
+			Some(_ram) => unimplemented!(),
 			None => 0,
 		}
 	}
 
-	fn write_eram_u8(&mut self, address: u16, value: u8) {
+	fn write_eram_u8(&mut self, _address: u16, _value: u8) {
 		match self.ram.as_ref() {
-			Some(ram) => unimplemented!(),
+			Some(_ram) => unimplemented!(),
 			None => {}
 		}
 	}

@@ -40,6 +40,7 @@ macro_rules! define_flag {
 pub enum CycleResult {
 	NeedsMore,
 	Finished,
+	FinishedChangedPc,
 }
 
 #[derive(Debug, Default)]
@@ -213,6 +214,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0x04 => alu::inc_b,
 			0x05 => alu::dec_b,
 			0x06 => load_store_move::ld_b_imm_u8,
+			0x07 => alu::rlca,
 			0x08 => load_store_move::ld_deref_imm_u16_sp,
 			0x09 => alu::add_hl_bc,
 			0x0a => load_store_move::ld_a_deref_bc,
@@ -220,6 +222,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0x0c => alu::inc_c,
 			0x0d => alu::dec_c,
 			0x0e => load_store_move::ld_c_imm_u8,
+			0x0F => alu::rrca,
 			0x11 => load_store_move::ld_de_imm_u16,
 			0x12 => load_store_move::ld_deref_de_a,
 			0x13 => alu::inc_de,
@@ -242,6 +245,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0x24 => alu::inc_h,
 			0x25 => alu::dec_h,
 			0x26 => load_store_move::ld_h_imm_u8,
+			0x27 => alu::daa,
 			0x28 => flow::jr_z_i8,
 			0x29 => alu::add_hl_hl,
 			0x2a => load_store_move::ld_a_hl_plus,
@@ -413,7 +417,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0xD0 => flow::ret_nc,
 			0xD1 => load_store_move::pop_de,
 			0xD2 => flow::jp_nc_u16,
-			0xD3 => panic!("Executing bad opcode {:#02X}", opcode),
+			0xD3 => panic!("Executing bad opcode {:#02X} @ PC={:#04X}", opcode, state.registers.pc),
 			0xD4 => flow::call_nc_u16,
 			0xD5 => load_store_move::push_de,
 			0xD6 => alu::sub_a_imm_u8,
@@ -421,21 +425,25 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0xD8 => flow::ret_c,
 			0xD9 => flow::reti,
 			0xDA => flow::jp_c_u16,
-			0xDB => panic!("Executing bad opcode {:#02X}", opcode),
+			0xDB => panic!("Executing bad opcode {:#02X} @ PC={:#04X}", opcode, state.registers.pc),
 			0xDC => flow::call_c_u16,
-			0xDD => panic!("Executing bad opcode {:#02X}", opcode),
+			0xDD => panic!("Executing bad opcode {:#02X} @ PC={:#04X}", opcode, state.registers.pc),
 			0xDE => alu::sbc_a_imm_u8,
 			0xDF => flow::rst_0x18,
 			0xE0 => load_store_move::ldh_imm_u8_a,
 			0xE1 => load_store_move::pop_hl,
 			0xE2 => load_store_move::ldh_deref_c_a,
-			0xE3 | 0xE4 => panic!("Executing bad opcode {:#02X}", opcode),
+			0xE3 | 0xE4 => {
+				panic!("Executing bad opcode {:#02X} @ PC={:#04X}", opcode, state.registers.pc)
+			}
 			0xE5 => load_store_move::push_hl,
 			0xE6 => alu::and_a_imm_u8,
 			0xE7 => flow::rst_0x20,
 			0xE9 => flow::jp_hl,
 			0xEA => load_store_move::ld_deref_imm_u16_a,
-			0xEB | 0xEC | 0xED => panic!("Executing bad opcode {:#02X}", opcode),
+			0xEB | 0xEC | 0xED => {
+				panic!("Executing bad opcode {:#02X} @ PC={:#04X}", opcode, state.registers.pc)
+			}
 			0xEE => alu::xor_a_imm_u8,
 			0xEF => flow::rst_0x28,
 			0xF0 => load_store_move::ldh_a_imm_u8,
@@ -449,7 +457,9 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0xF9 => load_store_move::ld_sp_hl,
 			0xFA => load_store_move::ld_a_deref_imm_u16,
 			0xFB => misc::ei,
-			0xFC | 0xFD => panic!("Executing bad opcode {:#02X}", opcode),
+			0xFC | 0xFD => {
+				panic!("Executing bad opcode {:#02X} @ PC={:#04X}", opcode, state.registers.pc)
+			}
 			0xFE => alu::cp_a_imm_u8,
 			0xFF => flow::rst_0x38,
 			unknown => {
@@ -464,14 +474,16 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		result
 	};
 
-	if result == CycleResult::Finished {
+	if result == CycleResult::Finished || result == CycleResult::FinishedChangedPc {
 		if state.used_halt_bug {
 			state.registers.pc = state.registers.pc.overflowing_add(1).0;
 		}
 
-		match state.registers.opcode_bytecount {
-			Some(len) => state.registers.pc = state.registers.pc.overflowing_add(len as u16).0,
-			None => panic!("Forgot to set opcode len"),
+		if result != CycleResult::FinishedChangedPc {
+			match state.registers.opcode_bytecount {
+				Some(len) => state.registers.pc = state.registers.pc.overflowing_add(len as u16).0,
+				None => panic!("Forgot to set opcode len"),
+			}
 		}
 
 		if !state.registers.mem_op_happened {

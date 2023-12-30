@@ -2,8 +2,9 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
-	event::{Event, VirtualKeyCode},
+	event::{Event, WindowEvent},
 	event_loop::{ControlFlow, EventLoop},
+	keyboard::KeyCode,
 	window::WindowBuilder,
 };
 use winit_input_helper::WinitInputHelper;
@@ -15,21 +16,21 @@ macro_rules! define_keypress {
 		if $input.key_pressed($config.bindings.$key)
 			&& !*$keymap.idx(&$config, $config.bindings.$key)
 		{
-			$tx.send(WindowEvent::$event).unwrap();
+			$tx.send(EmulatorWindowEvent::$event).unwrap();
 			*$keymap.idx(&$config, $config.bindings.$key) = true;
 		}
 
 		if $input.key_released($config.bindings.$key)
 			&& *$keymap.idx(&$config, $config.bindings.$key)
 		{
-			$tx.send(WindowEvent::$event).unwrap();
+			$tx.send(EmulatorWindowEvent::$event).unwrap();
 			*$keymap.idx(&$config, $config.bindings.$key) = false;
 		}
 	};
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum WindowEvent {
+pub enum EmulatorWindowEvent {
 	AToggle,
 	BToggle,
 	SelectToggle,
@@ -41,6 +42,7 @@ pub enum WindowEvent {
 	PauseToggle,
 	LogToggle,
 	Exit,
+	DumpMemory,
 }
 
 #[derive(Debug)]
@@ -65,7 +67,7 @@ struct Keymap {
 }
 
 impl Keymap {
-	pub fn idx(&mut self, config: &DeemgeeConfig, kc: VirtualKeyCode) -> &mut bool {
+	pub fn idx(&mut self, config: &DeemgeeConfig, kc: KeyCode) -> &mut bool {
 		if kc == config.bindings.a {
 			&mut self.a
 		} else if kc == config.bindings.b {
@@ -90,8 +92,12 @@ impl Keymap {
 	}
 }
 
-pub fn run_window(config: DeemgeeConfig, rx: Receiver<GameboyEvent>, tx: Sender<WindowEvent>) {
-	let event_loop = EventLoop::new();
+pub fn run_window(
+	config: DeemgeeConfig,
+	rx: Receiver<GameboyEvent>,
+	tx: Sender<EmulatorWindowEvent>,
+) {
+	let event_loop = EventLoop::new().unwrap();
 	let mut input = WinitInputHelper::new();
 
 	let window = { WindowBuilder::new().with_title("OwO").build(&event_loop).unwrap() };
@@ -107,70 +113,98 @@ pub fn run_window(config: DeemgeeConfig, rx: Receiver<GameboyEvent>, tx: Sender<
 
 	let mut keymap = Keymap::default();
 
-	event_loop.run(move |event, _, control_flow| {
-		if let Event::RedrawRequested(_) = event {
-			let frame = pixels.get_frame();
+	let mut request_redraw = false;
+	let mut close_requested = false;
 
-			match fb.as_ref() {
-				Some(fb) => {
-					redraw_happened = true;
-					frame.copy_from_slice(fb.as_slice());
-				}
-				None => {
-					let x = vec![0xff; frame.len()];
-					frame.copy_from_slice(x.as_slice())
-				}
-			}
-			if let Err(why) = pixels.render() {
-				log::error!("Pixels Error: {}", why);
-				*control_flow = ControlFlow::Exit;
-				tx.send(WindowEvent::Exit).unwrap();
-				return;
-			}
-		}
+	event_loop
+		.run(move |event, target| {
+			match &event {
+				Event::WindowEvent { event, .. } => match event {
+					WindowEvent::CloseRequested => close_requested = true,
+					WindowEvent::RedrawRequested => {
+						let frame = pixels.frame_mut();
 
-		if input.update(&event) {
-			if input.key_pressed(config.bindings.exit) || input.quit() {
-				*control_flow = ControlFlow::Exit;
-				tx.send(WindowEvent::Exit).unwrap();
-				return;
-			}
-
-			if input.key_pressed(config.bindings.pause) {
-				tx.send(WindowEvent::PauseToggle).unwrap();
-			}
-
-			if input.key_pressed(config.bindings.log_ops) {
-				tx.send(WindowEvent::LogToggle).unwrap();
-			}
-
-			define_keypress!(input, config, keymap, tx, a, AToggle);
-			define_keypress!(input, config, keymap, tx, b, BToggle);
-			define_keypress!(input, config, keymap, tx, start, StartToggle);
-			define_keypress!(input, config, keymap, tx, select, SelectToggle);
-			define_keypress!(input, config, keymap, tx, up, UpToggle);
-			define_keypress!(input, config, keymap, tx, down, DownToggle);
-			define_keypress!(input, config, keymap, tx, left, LeftToggle);
-			define_keypress!(input, config, keymap, tx, right, RightToggle);
-		}
-
-		if let Some(size) = input.window_resized() {
-			pixels.resize_surface(size.width, size.height);
-			window.request_redraw();
-			redraw_happened = false;
-		}
-
-		while let Ok(event) = rx.try_recv() {
-			match event {
-				GameboyEvent::Framebuffer(buf) => {
-					fb = Some(buf);
-
-					if redraw_happened {
+						match fb.as_ref() {
+							Some(fb) => {
+								redraw_happened = true;
+								frame.copy_from_slice(fb.as_slice());
+							}
+							None => {
+								let x = vec![0xff; frame.len()];
+								frame.copy_from_slice(x.as_slice())
+							}
+						}
+						if let Err(why) = pixels.render() {
+							log::error!("Pixels Error: {}", why);
+							close_requested = true;
+							tx.send(EmulatorWindowEvent::Exit).unwrap();
+							return;
+						}
+					}
+					_ => {}
+				},
+				Event::AboutToWait => {
+					if request_redraw && !close_requested {
 						window.request_redraw();
-						redraw_happened = false;
+					}
+
+					target.set_control_flow(ControlFlow::Poll);
+
+					if close_requested {
+						target.exit();
+					}
+				}
+				_ => {}
+			}
+
+			if input.update(&event) {
+				if input.key_pressed(config.bindings.exit)
+					|| (input.close_requested() || input.destroyed())
+				{
+					tx.send(EmulatorWindowEvent::Exit).unwrap();
+					return;
+				}
+
+				if input.key_pressed(config.bindings.pause) {
+					tx.send(EmulatorWindowEvent::PauseToggle).unwrap();
+				}
+
+				if input.key_pressed(config.bindings.log_ops) {
+					tx.send(EmulatorWindowEvent::LogToggle).unwrap();
+				}
+
+				if input.key_pressed(config.bindings.dump_memory) {
+					tx.send(EmulatorWindowEvent::DumpMemory).unwrap();
+				}
+
+				define_keypress!(input, config, keymap, tx, a, AToggle);
+				define_keypress!(input, config, keymap, tx, b, BToggle);
+				define_keypress!(input, config, keymap, tx, start, StartToggle);
+				define_keypress!(input, config, keymap, tx, select, SelectToggle);
+				define_keypress!(input, config, keymap, tx, up, UpToggle);
+				define_keypress!(input, config, keymap, tx, down, DownToggle);
+				define_keypress!(input, config, keymap, tx, left, LeftToggle);
+				define_keypress!(input, config, keymap, tx, right, RightToggle);
+			}
+
+			if let Some(size) = input.window_resized() {
+				pixels.resize_surface(size.width, size.height).unwrap();
+				window.request_redraw();
+				redraw_happened = false;
+			}
+
+			while let Ok(event) = rx.try_recv() {
+				match event {
+					GameboyEvent::Framebuffer(buf) => {
+						fb = Some(buf);
+
+						if redraw_happened {
+							request_redraw = true;
+							redraw_happened = false;
+						}
 					}
 				}
 			}
-		}
-	});
+		})
+		.expect("event loop error");
 }

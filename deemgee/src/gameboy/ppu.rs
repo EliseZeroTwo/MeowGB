@@ -120,6 +120,7 @@ impl OAMEntry {
 		(self.flags >> 5) & 0b1 == 1
 	}
 
+	#[allow(unused)]
 	pub fn palette_number(&self) -> bool {
 		(self.flags >> 4) & 0b1 == 1
 	}
