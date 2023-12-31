@@ -85,7 +85,7 @@ impl Mapper for MBC1 {
 				(self.rom_bank_number | (self.extra_2_bit_reg << 5)) as usize * 0x4000
 			} else {
 				self.rom_bank_number as usize * 0x4000
-			}]
+			} + (address as usize - 0x4000)]
 		}
 	}
 
@@ -101,14 +101,14 @@ impl Mapper for MBC1 {
 
 	fn read_eram_u8(&self, _address: u16) -> u8 {
 		match self.ram.as_ref() {
-			Some(_ram) => unimplemented!(),
+			Some(_ram) => 0,
 			None => 0,
 		}
 	}
 
 	fn write_eram_u8(&mut self, _address: u16, _value: u8) {
 		match self.ram.as_ref() {
-			Some(_ram) => unimplemented!(),
+			Some(_ram) => {}
 			None => {}
 		}
 	}

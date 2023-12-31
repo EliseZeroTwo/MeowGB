@@ -7,7 +7,12 @@ pub struct Memory {
 }
 
 impl Memory {
-	pub fn new(bootrom: [u8; 0x100]) -> Self {
-		Self { wram: [0; 0x2000], hram: [0; 0xAF], bootrom, bootrom_disabled: false }
+	pub fn new(bootrom: Option<[u8; 0x100]>) -> Self {
+		Self {
+			wram: [0; 0x2000],
+			hram: [0; 0xAF],
+			bootrom: bootrom.unwrap_or_else(|| [0u8; 0x100]),
+			bootrom_disabled: bootrom.is_none(),
+		}
 	}
 }

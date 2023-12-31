@@ -242,7 +242,7 @@ opcode!(ld_hl_sp_i8, 0xF8, "LD HL,SP+i8", false, 2, {
 		let val = state.registers.take_mem() as i8;
 
 		let rhs = if val < 0 {
-			state.registers.sp.overflowing_sub((val as u8 & !(1u8 << 7)) as u16).0
+			state.registers.sp.overflowing_sub(val.abs() as u16).0
 		} else {
 			state.registers.sp.overflowing_add(val as u16).0
 		};

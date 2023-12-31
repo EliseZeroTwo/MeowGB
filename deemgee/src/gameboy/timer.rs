@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct Timer {
 	pub enable: bool,
 	pub clock: TimerClock,
@@ -6,6 +7,7 @@ pub struct Timer {
 	pub tima: u8,
 	pub tima_counter: u16,
 	pub tma: u8,
+	overflow: bool,
 }
 
 impl Timer {
@@ -18,22 +20,31 @@ impl Timer {
 			div: 0,
 			div_counter: 0,
 			tima_counter: 0,
+			overflow: false,
 		}
 	}
 
 	pub fn tick(&mut self) -> bool {
-		self.div_counter = self.div_counter.overflowing_add(1).0;
+		self.div_counter = self.div_counter.wrapping_add(1);
 		if self.div_counter == 0 {
-			self.div = self.div.overflowing_add(1).0;
+			self.div = self.div.wrapping_add(1);
 		}
 
 		if self.enable {
-			self.tima_counter = self.tima_counter.overflowing_add(1).0;
+			self.tima_counter = self.tima_counter.wrapping_add(4);
 			if self.tima_counter >= self.clock.cycles() {
-				self.tima = self.tima.overflowing_add(1).0;
+				self.tima_counter = 0;
+				self.tima = self.tima.wrapping_add(1);
 
-				return self.tima == 0;
+				self.overflow = self.tima == 0;
+				return false;
 			}
+		}
+
+		if self.overflow {
+			self.tima = self.tma;
+			self.overflow = false;
+			return true;
 		}
 		false
 	}
@@ -44,7 +55,14 @@ impl Timer {
 
 	pub fn write_tac(&mut self, value: u8) {
 		self.enable = (value >> 2) & 0b1 == 1;
-		self.clock = TimerClock::from_tac_clock(value);
+		self.tima_counter = 0;
+		let new_clock = TimerClock::from_tac_clock(value);
+		if self.clock == TimerClock::C16 && new_clock == TimerClock::C1024 && self.enable {
+			self.tima = self.tima.wrapping_add(1);
+
+			self.overflow = self.tima == 0;
+		}
+		self.clock = new_clock;
 	}
 }
 

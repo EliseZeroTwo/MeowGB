@@ -33,3 +33,39 @@ opcode!(halt, 0x76, "HALT", false, 1, {
 		CycleResult::Finished
 	}
 });
+
+opcode!(stop, 0x10, "STOP", false, 1, {
+	0 => {
+		CycleResult::NeedsMore
+	},
+	1 => {
+		let button_held = state.joypad.cpu_read() & 0b1111 != 0;
+		let interrupt_pending = state.interrupts.interrupt_enable & state.interrupts.interrupt_flag != 0;
+
+		match button_held {
+			true => match interrupt_pending {
+				true => {
+					state.registers.pc = state.registers.pc.wrapping_add(1);
+				},
+				false => {
+					state.registers.pc = state.registers.pc.wrapping_add(2);
+					state.halt = true;
+				}
+			},
+			false => match interrupt_pending {
+				true => {
+					state.registers.pc = state.registers.pc.wrapping_add(1);
+					state.stop = true;
+					state.timer.div = 0;
+				},
+				false => {
+					state.registers.pc = state.registers.pc.wrapping_add(2);
+					state.stop = true;
+					state.timer.div = 0;
+				}
+			},
+		}
+
+		CycleResult::FinishedKeepPc
+	}
+});

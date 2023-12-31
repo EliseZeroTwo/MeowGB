@@ -1,7 +1,7 @@
 mod cpu;
 mod interrupts;
 mod joypad;
-mod mapper;
+pub mod mapper;
 mod memory;
 mod ppu;
 mod serial;
@@ -40,12 +40,83 @@ impl DmaState {
 	}
 }
 
+pub struct RingBuffer<T: std::fmt::Debug + Copy + Default, const SIZE: usize> {
+	buffer: [T; SIZE],
+	size: usize,
+	write_ptr: usize,
+	read_ptr: usize,
+}
+
+impl<T: std::fmt::Debug + Copy + Default, const SIZE: usize> RingBuffer<T, SIZE> {
+	pub fn new() -> Self {
+		RingBuffer { buffer: [T::default(); SIZE], size: 0, write_ptr: 0, read_ptr: 0 }
+	}
+
+	pub fn push(&mut self, value: T) {
+		self.buffer[self.write_ptr] = value;
+		if self.size < SIZE {
+			self.size += 1;
+		} else {
+			self.read_ptr += 1;
+			self.read_ptr %= SIZE;
+		}
+		self.write_ptr += 1;
+		self.write_ptr %= SIZE;
+	}
+
+	pub fn to_vec(&self) -> Vec<T> {
+		let mut out = Vec::new();
+		let mut offset = self.read_ptr;
+
+		for _ in 0..self.size {
+			out.push(self.buffer[offset]);
+
+			offset += 1;
+			offset %= SIZE;
+		}
+
+		out
+	}
+}
+
+#[test]
+fn test_ringbuffer() {
+	let mut ringbuffer: RingBuffer<u8, 16> = RingBuffer::new();
+
+	for x in 0..16 {
+		ringbuffer.push(x);
+	}
+
+	assert_eq!(
+		ringbuffer.to_vec().as_slice(),
+		&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+	);
+	ringbuffer.push(16);
+	assert_eq!(
+		ringbuffer.to_vec().as_slice(),
+		&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+	);
+	ringbuffer.push(17);
+	assert_eq!(
+		ringbuffer.to_vec().as_slice(),
+		&[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+	);
+
+	for x in 18..32 {
+		ringbuffer.push(x);
+	}
+	assert_eq!(
+		ringbuffer.to_vec().as_slice(),
+		&[16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+	);
+}
+
 pub struct Gameboy {
 	pub ppu: Ppu,
-	memory: Memory,
-	cartridge: Option<Box<dyn Mapper>>,
-	interrupts: Interrupts,
-	timer: Timer,
+	pub memory: Memory,
+	pub cartridge: Option<Box<dyn Mapper>>,
+	pub interrupts: Interrupts,
+	pub timer: Timer,
 	pub registers: Registers,
 	pub joypad: Joypad,
 	pub serial: Serial,
@@ -61,10 +132,13 @@ pub struct Gameboy {
 	pub halt: bool,
 	pub halt_bug: bool,
 	pub used_halt_bug: bool,
+	pub stop: bool,
+
+	pub pc_history: RingBuffer<u16, 0x200>,
 }
 
 impl Gameboy {
-	pub fn new(bootrom: [u8; 0x100]) -> Self {
+	pub fn new(bootrom: Option<[u8; 0x100]>) -> Self {
 		Self {
 			memory: Memory::new(bootrom),
 			cartridge: None,
@@ -74,7 +148,10 @@ impl Gameboy {
 			serial: Serial::new(),
 			dma: DmaState::new(),
 			ppu: Ppu::new(),
-			registers: Registers::default(),
+			registers: match bootrom.is_some() {
+				true => Registers::default(),
+				false => Registers::post_rom(),
+			},
 			sound: Sound::default(),
 			single_step: false,
 			breakpoints: [false; u16::MAX as usize + 1],
@@ -85,6 +162,8 @@ impl Gameboy {
 			halt: false,
 			halt_bug: false,
 			used_halt_bug: false,
+			stop: false,
+			pc_history: RingBuffer::new(),
 		}
 	}
 
@@ -112,6 +191,8 @@ impl Gameboy {
 		match bytes[0x147] {
 			0 => self.cartridge = Some(Box::new(NoMBC::new(bytes))),
 			1 => self.cartridge = Some(Box::new(MBC1::new(bytes))),
+			2 => self.cartridge = Some(Box::new(MBC1::new(bytes))),
+			3 => self.cartridge = Some(Box::new(MBC1::new(bytes))),
 			other => unimplemented!("Cartidge type: {:#X}", other),
 		}
 	}
@@ -120,13 +201,16 @@ impl Gameboy {
 		log::info!("\n-- Registers --\nAF: {:04X}\nBC: {:04X}\nDE: {:04X}\nHL: {:04X}\nSP: {:04X}\nPC: {:04X}\nZero: {}\nSubtract: {}\nHalf-Carry: {}\nCarry: {}\n-- Interrupts --\nIME: {}\nIE VBlank: {}\nIE LCD Stat: {}\nIE Timer: {}\nIE Serial: {}\nIE Joypad: {}\nIF VBlank: {}\nIF LCD Stat: {}\nIF Timer: {}\nIF Serial: {}\nIF Joypad: {}\n", self.registers.get_af(), self.registers.get_bc(), self.registers.get_de(), self.registers.get_hl(), self.registers.get_sp(), self.registers.pc, self.registers.get_zero(), self.registers.get_subtract(), self.registers.get_half_carry(), self.registers.get_carry(), self.interrupts.ime, self.interrupts.read_ie_vblank(), self.interrupts.read_ie_lcd_stat(), self.interrupts.read_ie_timer(), self.interrupts.read_ie_serial(), self.interrupts.read_ie_joypad(), self.interrupts.read_if_vblank(), self.interrupts.read_if_lcd_stat(), self.interrupts.read_if_timer(), self.interrupts.read_if_serial(), self.interrupts.read_if_joypad());
 	}
 
-	pub fn tick(&mut self) -> bool {
+	pub fn tick(&mut self) -> (bool, Option<i64>) {
 		if self.breakpoints[self.registers.pc as usize] && !self.single_step {
 			self.single_step = true;
 			log::info!("Breakpoint hit @ {:#X}", self.registers.pc);
 		}
 
+		let mut diff = None;
+
 		if self.trigger_bp || (self.single_step && self.registers.cycle == 0) {
+			let entered_step = chrono::Utc::now();
 			self.trigger_bp = false;
 			self.single_step = true;
 			let mut input = String::new();
@@ -189,10 +273,20 @@ impl Gameboy {
 							log::info!("Continuing");
 							exit = false;
 						}
+						"timer" => {
+							println!("-- Timer Info --\n{:#?}\n-- End of Timer Info --", self.timer)
+						}
 						"p" | "pause" => {
 							self.single_step = true;
 							log::info!("Single step activated");
 							exit = false;
+						}
+						"pch" => {
+							println!("-- Start of PC History (new to old) --");
+							for (idx, pc) in self.pc_history.to_vec().iter().rev().enumerate() {
+								println!("{}: {:#04X}", idx + 1, pc);
+							}
+							println!("-- End of PC History --");
 						}
 						"s" | "step" | "" => {
 							self.log_next_opcode();
@@ -207,6 +301,17 @@ impl Gameboy {
 						}
 						"dumpfb" => {
 							println!("Written to: {}", self.ppu.dump_fb());
+						}
+						"dumpoam" => {
+							for x in 0..self.ppu.oam.len() {
+								if x % 0x10 == 0 {
+									print!("\n{:X}: ", 0xFE00 + x)
+								}
+
+								let mem_val = self.ppu.oam[x];
+								print!("{:02X} ", mem_val);
+							}
+							println!();
 						}
 						"dumpvram" => {
 							for x in 0..0x200 {
@@ -241,8 +346,9 @@ impl Gameboy {
 				Err(stdin_err) => panic!("Failed to lock stdin: {:?}", stdin_err),
 			}
 
+			diff = Some((chrono::Utc::now() - entered_step).num_milliseconds());
 			if exit {
-				return false;
+				return (false, diff);
 			}
 		}
 		if self.timer.tick() {
@@ -255,7 +361,7 @@ impl Gameboy {
 		if self.serial.tick() {
 			self.interrupts.write_if_serial(true);
 		}
-		redraw_requested
+		(redraw_requested, diff)
 	}
 
 	fn tick_dma(&mut self) {
@@ -271,6 +377,12 @@ impl Gameboy {
 				}
 			} else if self.dma.base <= 0x9F {
 				self.ppu.dma_read_vram(offset)
+			} else if self.dma.base <= 0xDF {
+				let address = (self.dma.base as u16) << 8 | offset as u16;
+				self.memory.wram[address as usize - 0xC000]
+			} else if self.dma.base <= 0xFD {
+				let address = (self.dma.base as u16) << 8 | offset as u16;
+				self.memory.wram[address as usize - 0xE000]
 			} else {
 				0xFF
 			};
@@ -285,19 +397,19 @@ impl Gameboy {
 			0xFF00 => self.joypad.cpu_read(),
 			0xFF01 => self.serial.sb,
 			0xFF02 => self.serial.sc,
-			0xFF03 => 0, // Unused
+			0xFF03 => 0xFF, // Unused
 			0xFF04 => self.timer.div,
 			0xFF05 => self.timer.tima,
 			0xFF06 => self.timer.tma,
 			0xFF07 => self.timer.read_tac(),
-			0xFF08..=0xFF0E => 0, // Unused
+			0xFF08..=0xFF0E => 0xFF, // Unused
 			0xFF0F => self.interrupts.interrupt_flag,
 			0xFF10 => self.sound.nr10,
 			0xFF11 => self.sound.nr11,
 			0xFF12 => self.sound.nr12,
 			0xFF13 => self.sound.nr13,
 			0xFF14 => self.sound.nr14,
-			0xFF15 => 0,
+			0xFF15 => 0xFF,
 			0xFF16 => self.sound.nr21,
 			0xFF17 => self.sound.nr22,
 			0xFF18 => self.sound.nr23,
@@ -307,7 +419,7 @@ impl Gameboy {
 			0xFF1C => self.sound.nr32,
 			0xFF1D => self.sound.nr33,
 			0xFF1E => self.sound.nr34,
-			0xFF1F => 0,
+			0xFF1F => 0xFF,
 			0xFF20 => self.sound.nr41,
 			0xFF21 => self.sound.nr42,
 			0xFF22 => self.sound.nr43,
@@ -315,7 +427,7 @@ impl Gameboy {
 			0xFF24 => self.sound.nr50,
 			0xFF25 => self.sound.nr51,
 			0xFF26 => self.sound.nr52,
-			0xFF27..=0xFF2F => 0,
+			0xFF27..=0xFF2F => 0xFF,
 			0xFF30..=0xFF3F => self.sound.wave_pattern_ram[address as usize - 0xFF30],
 			0xFF40 => self.ppu.lcdc,
 			0xFF41 => self.ppu.stat,
@@ -324,18 +436,18 @@ impl Gameboy {
 			0xFF44 => self.ppu.ly,
 			0xFF45 => self.ppu.lyc,
 			0xFF46 => self.dma.base,
-			0xFF47..=0xFF49 => 0,
+			0xFF47..=0xFF49 => 0xFF,
 			0xFF4A => self.ppu.wy,
 			0xFF4B => self.ppu.wx,
-			0xFF4C..=0xFF4E => 0, // Unused
-			0xFF4F => 0,          // CGB VRAM Bank Select
+			0xFF4C..=0xFF4E => 0xFF, // Unused
+			0xFF4F => 0xFF,          // CGB VRAM Bank Select
 			0xFF50 => self.memory.bootrom_disabled as u8,
-			0xFF51..=0xFF55 => 0, // CGB VRAM DMA
-			0xFF56..=0xFF67 => 0, // Unused
-			0xFF68..=0xFF69 => 0, // BJ/OBJ Palettes
-			0xFF6A..=0xFF6F => 0, // Unused
-			0xFF70 => 0,          // CGB WRAM Bank Select
-			0xFF71..=0xFF7F => 0, // Unused
+			0xFF51..=0xFF55 => 0xFF, // CGB VRAM DMA
+			0xFF56..=0xFF67 => 0xFF, // Unused
+			0xFF68..=0xFF69 => 0xFF, // BJ/OBJ Palettes
+			0xFF6A..=0xFF6F => 0xFF, // Unused
+			0xFF70 => 0xFF,          // CGB WRAM Bank Select
+			0xFF71..=0xFF7F => 0xFF, // Unused
 			_ => unreachable!("IO Read Invalid"),
 		}
 	}
@@ -346,12 +458,12 @@ impl Gameboy {
 			0xFF01 => self.serial.sb = value,
 			0xFF02 => self.serial.sc = value,
 			0xFF03 => {} // Unused
-			0xFF04 => self.timer.div = value,
+			0xFF04 => self.timer.div = 0,
 			0xFF05 => self.timer.tima = value,
 			0xFF06 => self.timer.tma = value,
 			0xFF07 => self.timer.write_tac(value),
 			0xFF08..=0xFF0E => {} // Unused
-			0xFF0F => self.interrupts.interrupt_flag = value & 0b1_1111,
+			0xFF0F => self.interrupts.interrupt_flag = value | !0b1_1111,
 			0xFF10 => self.sound.nr10 = value,
 			0xFF11 => self.sound.nr11 = value,
 			0xFF12 => self.sound.nr12 = value,
@@ -412,28 +524,61 @@ impl Gameboy {
 		let mut out = [0u8; 0xFFFF];
 
 		for address in 0..0xFFFF {
-			out[address as usize] = match address {
-				0..=0xFF if !self.memory.bootrom_disabled => self.memory.bootrom[address as usize],
-				0..=0x7FFF => match self.cartridge.as_ref() {
-					Some(mapper) => mapper.read_rom_u8(address),
-					None => 0,
-				},
-				0x8000..=0x9FFF => self.ppu.cpu_read_vram(address),
-				0xA000..=0xBFFF => match self.cartridge.as_ref() {
-					Some(mapper) => mapper.read_eram_u8(address),
-					None => 0,
-				},
-				0xC000..=0xDFFF => self.memory.wram[address as usize - 0xC000],
-				0xE000..=0xFDFF => self.memory.wram[address as usize - 0xE000],
-				0xFE00..=0xFE9F => self.ppu.cpu_read_oam(address),
-				0xFEA0..=0xFEFF => 0,
-				0xFF00..=0xFF7F => self.cpu_read_io(address),
-				0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80],
-				0xFFFF => self.interrupts.interrupt_enable,
-			};
+			out[address as usize] = self.debug_read_u8(address);
 		}
 
 		out
+	}
+
+	/// Warning: This bypasses the memory bus and only exists for
+	/// debugging/testing purposes
+	pub fn debug_read_u8(&self, address: u16) -> u8 {
+		match address {
+			0..=0xFF if !self.memory.bootrom_disabled => self.memory.bootrom[address as usize],
+			0..=0x7FFF => match self.cartridge.as_ref() {
+				Some(mapper) => mapper.read_rom_u8(address),
+				None => 0,
+			},
+			0x8000..=0x9FFF => self.ppu.cpu_read_vram(address),
+			0xA000..=0xBFFF => match self.cartridge.as_ref() {
+				Some(mapper) => mapper.read_eram_u8(address),
+				None => 0,
+			},
+			0xC000..=0xDFFF => self.memory.wram[address as usize - 0xC000],
+			0xE000..=0xFDFF => self.memory.wram[address as usize - 0xE000],
+			0xFE00..=0xFE9F => self.ppu.cpu_read_oam(address),
+			0xFEA0..=0xFEFF => 0,
+			0xFF00..=0xFF7F => self.cpu_read_io(address),
+			0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80],
+			0xFFFF => self.interrupts.interrupt_enable,
+		}
+	}
+
+	/// Warning: This bypasses the memory bus and only exists for
+	/// debugging/testing purposes
+	#[allow(unused)]
+	pub fn debug_write_u8(&mut self, address: u16, value: u8) {
+		match address {
+			0..=0xFF if !self.memory.bootrom_disabled => {}
+			0..=0x7FFF => {
+				if let Some(mapper) = self.cartridge.as_mut() {
+					mapper.write_rom_u8(address, value)
+				}
+			}
+			0x8000..=0x9FFF => self.ppu.cpu_write_vram(address, value),
+			0xA000..=0xBFFF => {
+				if let Some(mapper) = self.cartridge.as_mut() {
+					mapper.write_eram_u8(address, value)
+				}
+			}
+			0xC000..=0xDFFF => self.memory.wram[address as usize - 0xC000] = value,
+			0xE000..=0xFDFF => self.memory.wram[address as usize - 0xE000] = value,
+			0xFE00..=0xFE9F => self.ppu.cpu_write_oam(address, value),
+			0xFEA0..=0xFEFF => {}
+			0xFF00..=0xFF7F => self.cpu_write_io(address, value),
+			0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80] = value,
+			0xFFFF => self.interrupts.interrupt_enable = value & 0b1_1111,
+		}
 	}
 
 	fn internal_cpu_read_u8(&self, address: u16) -> u8 {

@@ -18,13 +18,20 @@ macro_rules! define_bitfield_u8_gs {
 pub struct Interrupts {
 	pub ime: bool,
 	pub ei_queued: bool,
+	pub cycle_passed: bool,
 	pub interrupt_enable: u8,
 	pub interrupt_flag: u8,
 }
 
 impl Interrupts {
 	pub fn new() -> Self {
-		Self { ime: false, interrupt_enable: 0, interrupt_flag: 0, ei_queued: false }
+		Self {
+			ime: false,
+			interrupt_enable: 0,
+			interrupt_flag: 0b11100000,
+			ei_queued: false,
+			cycle_passed: false,
+		}
 	}
 
 	define_bitfield_u8_gs!(ie_vblank, 0, interrupt_enable);

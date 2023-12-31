@@ -9,8 +9,8 @@ pub trait Mapper {
 }
 
 pub struct NoMBC {
-	rom: [u8; 0x8000],
-	ram: Option<[u8; 0x2000]>,
+	pub rom: [u8; 0x8000],
+	pub ram: Option<[u8; 0x2000]>,
 }
 
 impl NoMBC {
@@ -36,9 +36,7 @@ impl Mapper for NoMBC {
 		self.rom[address as usize]
 	}
 
-	fn write_rom_u8(&mut self, address: u16, value: u8) {
-		self.rom[address as usize] = value
-	}
+	fn write_rom_u8(&mut self, _address: u16, _value: u8) {}
 
 	fn read_eram_u8(&self, address: u16) -> u8 {
 		let decoded_address = address - 0xA000;

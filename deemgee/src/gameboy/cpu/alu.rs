@@ -17,7 +17,7 @@ pub fn sub_with_carry(lhs: u8, rhs: u8, carry: bool) -> CarryResult {
 	let (result, second_carry) = first_res.overflowing_sub(carry_u8);
 
 	let carry = first_carry || second_carry;
-	let half_carry = (lhs & 0xF) < (rhs & 0xF) + carry_u8;
+	let half_carry = (lhs & 0xF).wrapping_sub(rhs & 0xF).wrapping_sub(carry_u8) & 0x10 != 0;
 
 	CarryResult { result, carry, half_carry }
 }
@@ -29,21 +29,21 @@ pub fn add_with_carry(lhs: u8, rhs: u8, carry: bool) -> CarryResult {
 	let (result, second_carry) = first_res.overflowing_add(carry_u8);
 
 	let carry = first_carry || second_carry;
-	let half_carry = (lhs & 0xF) + (rhs & 0xF) > 0xF;
+	let half_carry = (lhs & 0xF) + (rhs & 0xF) + carry_u8 > 0xF;
 
 	CarryResult { result, carry, half_carry }
 }
 
 pub fn add(lhs: u8, rhs: u8) -> CarryResult {
 	let (result, carry) = lhs.overflowing_add(rhs);
-	let half_carry = (lhs & 0xF) + (rhs & 0xF) > 0xF;
+	let half_carry = (lhs & 0xF) + (rhs & 0xF) & 0x10 != 0;
 
 	CarryResult { result, carry, half_carry }
 }
 
 pub fn sub(lhs: u8, rhs: u8) -> CarryResult {
 	let (result, carry) = lhs.overflowing_sub(rhs);
-	let half_carry = (lhs & 0xF) < (rhs & 0xF);
+	let half_carry = (lhs & 0xF).wrapping_sub(rhs & 0xF) & 0x10 != 0;
 
 	CarryResult { result, carry, half_carry }
 }
@@ -454,7 +454,7 @@ opcode!(dec_deref_hl, 0x35, "DEC (HL)", false, 1, {
 
 		state.cpu_write_u8(state.registers.get_hl(), result);
 		state.registers.set_zero(result == 0);
-		state.registers.set_subtract(false);
+		state.registers.set_subtract(true);
 		state.registers.set_half_carry(half_carry);
 		CycleResult::NeedsMore
 	},
@@ -469,7 +469,7 @@ opcode!(rla, 0x17, "RLA", false, 1, {
 		state.registers.a <<= 1;
 
 		if state.registers.get_carry() {
-			state.registers.a = state.registers.a.wrapping_add(1);
+			state.registers.a |= 1;
 		}
 
 		state.registers.set_zero(false);
@@ -487,7 +487,7 @@ opcode!(rra, 0x1f, "RRA", false, 1, {
 		state.registers.a >>= 1;
 
 		if state.registers.get_carry() {
-			state.registers.a = state.registers.a.wrapping_add(1 << 7);
+			state.registers.a |= 1 << 7;
 		}
 
 		state.registers.set_zero(false);
@@ -845,7 +845,7 @@ opcode!(rlca, 0x7, "RLCA", false, 1, {
 		state.registers.a <<= 1;
 		state.registers.a |= carry as u8;
 
-		state.registers.set_zero(state.registers.a == 0);
+		state.registers.set_zero(false);
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(carry);
@@ -859,7 +859,7 @@ opcode!(rrca, 0xF, "RRCA", false, 1, {
 		state.registers.a >>= 1;
 		state.registers.a |= (carry as u8) << 7;
 
-		state.registers.set_zero(state.registers.a == 0);
+		state.registers.set_zero(false);
 		state.registers.set_subtract(false);
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(carry);
@@ -872,23 +872,90 @@ opcode!(daa, 0x27, "DAA", false, 1, {
 		let mut value = 0;
 		let mut carry = false;
 
-		if state.registers.get_half_carry() || (!state.registers.get_subtract() && (state.registers.a & 0xF) > 9) {
-			value |= 0x06;
-		}
+		match state.registers.get_subtract() {
+			false => {
+				if state.registers.get_carry() || state.registers.a > 0x99 {
+					value |= 0x60;
+					carry = true;
+				}
 
-		if state.registers.get_carry() || (!state.registers.get_subtract() && state.registers.a > 0x99) {
-			value |= 0x60;
-			carry = true;
-		}
+				if state.registers.get_half_carry() || state.registers.a & 0xf > 0x9 {
+					value |= 0x06;
+				}
 
-		state.registers.a = match state.registers.get_subtract() {
-			true => state.registers.a.wrapping_sub(value),
-			false => state.registers.a.wrapping_add(value)
-		};
+				state.registers.a = state.registers.a.wrapping_add(value);
+			},
+			true => {
+				if state.registers.get_carry() {
+					value |= 0x60;
+					carry = true;
+				}
+
+				if state.registers.get_half_carry() {
+					value |= 0x06;
+				}
+
+				state.registers.a = state.registers.a.wrapping_sub(value);
+			}
+		}
 
 		state.registers.set_half_carry(false);
 		state.registers.set_carry(carry);
 		state.registers.set_zero(state.registers.a == 0);
+		CycleResult::Finished
+	}
+});
+
+opcode!(add_sp_imm_i8, 0xE8, "ADD sp,i8", false, 2, {
+	0 => {
+		state.cpu_read_u8(state.registers.pc + 1);
+		CycleResult::NeedsMore
+	},
+	1 => {
+		let value = state.registers.take_mem() as i8;
+
+		let CarryResult { carry, half_carry, .. } = add((state.registers.sp & 0xff) as u8, value as u8);
+
+		state.registers.set_half_carry(half_carry);
+		state.registers.set_carry(carry);
+
+		let CarryResult { result, carry, .. } = match value < 0 {
+			true => sub((state.registers.sp & 0xff) as u8, value.abs() as u8),
+			false => add((state.registers.sp & 0xff) as u8, value as u8),
+		};
+
+		state.registers.sp &= 0xFF00;
+		state.registers.sp |= result as u16;
+
+		state.registers.set_hold(match carry {
+			true => match value < 0 {
+				true => -1i8 as u16,
+				false => 1,
+			},
+			false => 0
+		});
+
+		CycleResult::NeedsMore
+
+	},
+	2 => {
+		CycleResult::NeedsMore
+	},
+	3 => {
+		let carry = state.registers.take_hold() as i8;
+
+		match carry {
+			1 => {
+				state.registers.sp = state.registers.sp.wrapping_add(1 << 8);
+			},
+			-1 => {
+				state.registers.sp = state.registers.sp.wrapping_sub(1 << 8);
+			},
+			_ => {}
+		}
+
+		state.registers.set_zero(false);
+		state.registers.set_subtract(false);
 		CycleResult::Finished
 	}
 });

@@ -93,6 +93,7 @@ impl Keymap {
 }
 
 pub fn run_window(
+	rom_name: &str,
 	config: DeemgeeConfig,
 	rx: Receiver<GameboyEvent>,
 	tx: Sender<EmulatorWindowEvent>,
@@ -100,7 +101,9 @@ pub fn run_window(
 	let event_loop = EventLoop::new().unwrap();
 	let mut input = WinitInputHelper::new();
 
-	let window = { WindowBuilder::new().with_title("OwO").build(&event_loop).unwrap() };
+	let window = {
+		WindowBuilder::new().with_title(format!("Meow - {}", rom_name)).build(&event_loop).unwrap()
+	};
 
 	let mut pixels = {
 		let window_size = window.inner_size();

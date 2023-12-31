@@ -43,7 +43,7 @@ pub enum CycleResult {
 	FinishedKeepPc,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Registers {
 	pub a: u8,
 	pub f: u8,
@@ -67,11 +67,49 @@ pub struct Registers {
 	pub in_interrupt_vector: Option<u8>,
 }
 
+impl PartialEq for Registers {
+	fn eq(&self, other: &Self) -> bool {
+		self.a == other.a
+			&& self.f == other.f
+			&& self.b == other.b
+			&& self.c == other.c
+			&& self.d == other.d
+			&& self.e == other.e
+			&& self.h == other.h
+			&& self.l == other.l
+			&& self.sp == other.sp
+			&& self.pc == other.pc
+	}
+}
+
 impl Registers {
-	define_register!(a, f);
+	pub fn get_af(&self) -> u16 {
+		(self.a as u16) << 8 | self.f as u16
+	}
+
+	pub fn set_af(&mut self, value: u16) {
+		self.a = (value >> 8) as u8;
+		self.f = value as u8 & 0b1111_0000;
+	}
 	define_register!(b, c);
 	define_register!(d, e);
 	define_register!(h, l);
+
+	pub fn post_rom() -> Self {
+		Self {
+			a: 0x01,
+			f: 0xB0,
+			b: 0x00,
+			c: 0x13,
+			d: 0x00,
+			e: 0xD8,
+			h: 0x01,
+			l: 0x4D,
+			sp: 0xFFFE,
+			pc: 0x0100,
+			..Default::default()
+		}
+	}
 
 	/// This is just a helper function for macros utilizing ident pasting
 	pub fn get_sp(&self) -> u16 {
@@ -110,7 +148,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 		state.interrupts.write_if_joypad(true);
 	}
 
-	if state.registers.cycle == 0 && state.halt {
+	if state.registers.cycle == 0 && (state.halt || state.stop) {
 		if (state.interrupts.read_ie_vblank() && state.interrupts.read_if_vblank())
 			|| (state.interrupts.read_ie_lcd_stat() && state.interrupts.read_if_lcd_stat())
 			|| (state.interrupts.read_ie_timer() && state.interrupts.read_if_timer())
@@ -118,6 +156,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			|| (state.interrupts.read_ie_joypad() && state.interrupts.read_if_joypad())
 		{
 			state.halt = false;
+			state.stop = false;
 		} else {
 			return;
 		}
@@ -149,8 +188,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 	}
 
 	if state.registers.cycle == 0 && state.interrupts.ei_queued {
-		state.interrupts.ime = state.interrupts.ei_queued;
-		state.interrupts.ei_queued = false;
+		state.interrupts.cycle_passed = true;
 	}
 
 	if state.registers.cycle == 0 && state.halt_bug {
@@ -176,6 +214,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 				CycleResult::NeedsMore
 			}
 			4 => {
+				let original_pc = state.registers.pc;
 				state.registers.pc = match idx {
 					0 => 0x40,
 					1 => 0x48,
@@ -186,7 +225,11 @@ pub fn tick_cpu(state: &mut Gameboy) {
 				};
 				state.registers.in_interrupt_vector = None;
 				state.registers.opcode_bytecount = Some(0);
-				log::info!("Triggering interrupt to {:#X}", state.registers.pc);
+				log::debug!(
+					"Triggering interrupt to {:#X} from {:#X}",
+					state.registers.pc,
+					original_pc
+				);
 				CycleResult::Finished
 			}
 			_ => unreachable!(),
@@ -194,16 +237,19 @@ pub fn tick_cpu(state: &mut Gameboy) {
 	} else {
 		let opcode = match state.registers.current_opcode {
 			Some(opcode) => opcode,
-			None => match state.registers.mem_read_hold.take() {
-				Some(opcode) => {
-					state.registers.current_opcode = Some(opcode);
-					opcode
+			None => {
+				state.pc_history.push(state.registers.pc);
+				match state.registers.mem_read_hold.take() {
+					Some(opcode) => {
+						state.registers.current_opcode = Some(opcode);
+						opcode
+					}
+					None => {
+						state.cpu_read_u8(state.registers.pc);
+						return;
+					}
 				}
-				None => {
-					state.cpu_read_u8(state.registers.pc);
-					return;
-				}
-			},
+			}
 		};
 
 		let result: CycleResult = match opcode {
@@ -223,6 +269,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0x0d => alu::dec_c,
 			0x0e => load_store_move::ld_c_imm_u8,
 			0x0F => alu::rrca,
+			0x10 => misc::halt,
 			0x11 => load_store_move::ld_de_imm_u16,
 			0x12 => load_store_move::ld_deref_de_a,
 			0x13 => alu::inc_de,
@@ -439,6 +486,7 @@ pub fn tick_cpu(state: &mut Gameboy) {
 			0xE5 => load_store_move::push_hl,
 			0xE6 => alu::and_a_imm_u8,
 			0xE7 => flow::rst_0x20,
+			0xE8 => alu::add_sp_imm_i8,
 			0xE9 => flow::jp_hl,
 			0xEA => load_store_move::ld_deref_imm_u16_a,
 			0xEB | 0xEC | 0xED => {
@@ -477,6 +525,12 @@ pub fn tick_cpu(state: &mut Gameboy) {
 	if result == CycleResult::Finished || result == CycleResult::FinishedKeepPc {
 		if state.used_halt_bug {
 			state.registers.pc = state.registers.pc.overflowing_add(1).0;
+		}
+
+		if state.interrupts.cycle_passed && state.interrupts.ei_queued {
+			state.interrupts.cycle_passed = false;
+			state.interrupts.ei_queued = false;
+			state.interrupts.ime = true;
 		}
 
 		if result == CycleResult::Finished {
