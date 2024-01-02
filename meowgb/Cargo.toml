@@ -15,5 +15,5 @@ serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.30"
 winit = { version = "0.29.7", default-features = false, features = ["serde", "rwh_05"] }
 winit_input_helper = "0.15.1"
-chrono = "0.4.31"
 log = "0.4.20"
+time = "0.3.31"

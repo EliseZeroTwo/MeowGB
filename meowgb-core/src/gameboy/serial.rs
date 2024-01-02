@@ -5,10 +5,12 @@ pub trait SerialWriter {
 }
 
 impl<T: Write> SerialWriter for T {
-    fn write_byte(&mut self, byte: u8) {
-        self.write_all(&[byte]).expect(format!("writing serial to {} failed", std::any::type_name::<T>()).as_str());
-		self.flush().expect(format!("flushing serial to {} failed", std::any::type_name::<T>()).as_str());
-    }
+	fn write_byte(&mut self, byte: u8) {
+		self.write_all(&[byte])
+			.expect(format!("writing serial to {} failed", std::any::type_name::<T>()).as_str());
+		self.flush()
+			.expect(format!("flushing serial to {} failed", std::any::type_name::<T>()).as_str());
+	}
 }
 
 pub struct Serial<S: SerialWriter> {

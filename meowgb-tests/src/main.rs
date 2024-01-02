@@ -1,7 +1,11 @@
-use std::{path::{PathBuf, Path}, sync::{RwLock, Arc}, time::{Duration, Instant}};
+use std::{
+	path::{Path, PathBuf},
+	sync::{Arc, RwLock},
+	time::{Duration, Instant},
+};
 
 use clap::{Parser, Subcommand};
-use meowgb_core::gameboy::{Gameboy, serial::SerialWriter};
+use meowgb_core::gameboy::{serial::SerialWriter, Gameboy};
 
 #[derive(Debug, Parser)]
 /// DMG Emulator
@@ -9,27 +13,27 @@ pub struct CliArgs {
 	/// game path
 	pub rom: PathBuf,
 	#[clap(subcommand)]
-	pub operation: Operation
+	pub operation: Operation,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum Operation {
 	Test {
 		/// maximum M-cycles
-		#[clap(short='m', long)]
+		#[clap(short = 'm', long)]
 		maximum_m_cycles: u64,
 		/// path to expected serial output
-		#[clap(short='s', long)]
+		#[clap(short = 's', long)]
 		expected_serial: PathBuf,
 	},
 	GenerateOutput {
 		/// M-cycles to run for
-		#[clap(short='m', long)]
+		#[clap(short = 'm', long)]
 		m_cycles: u64,
 		/// path to expected serial output
-		#[clap(short='s', long)]
+		#[clap(short = 's', long)]
 		expected_serial: PathBuf,
-	}
+	},
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -66,12 +70,16 @@ impl SyncWriter {
 }
 
 impl SerialWriter for SyncWriter {
-    fn write_byte(&mut self, byte: u8) {
-        self.0.write().unwrap().write_byte(byte);
-    }
+	fn write_byte(&mut self, byte: u8) {
+		self.0.write().unwrap().write_byte(byte);
+	}
 }
 
-fn generate_output(rom: &Path, m_cycles: u64, expected_serial: &Path) -> Result<Duration, DmgTestError> {
+fn generate_output(
+	rom: &Path,
+	m_cycles: u64,
+	expected_serial: &Path,
+) -> Result<Duration, DmgTestError> {
 	let rom = {
 		if !rom.is_file() {
 			return Err(DmgTestError::RomNotFound);
@@ -93,13 +101,17 @@ fn generate_output(rom: &Path, m_cycles: u64, expected_serial: &Path) -> Result<
 	drop(gameboy);
 
 	let serial_content = sync_writer.into_inner();
-	std::fs::write(expected_serial, &serial_content).map_err(DmgTestError::SerialOutputFileWrite)?;
-	
+	std::fs::write(expected_serial, &serial_content)
+		.map_err(DmgTestError::SerialOutputFileWrite)?;
 
 	Ok(instant.elapsed())
 }
 
-fn run_test(rom: &Path, maximum_m_cycles: u64, expected_serial: &Path) -> Result<(u64, Duration), DmgTestError> {
+fn run_test(
+	rom: &Path,
+	maximum_m_cycles: u64,
+	expected_serial: &Path,
+) -> Result<(u64, Duration), DmgTestError> {
 	let rom = {
 		if !rom.is_file() {
 			return Err(DmgTestError::RomNotFound);
@@ -137,7 +149,10 @@ fn run_test(rom: &Path, maximum_m_cycles: u64, expected_serial: &Path) -> Result
 
 	match sync_writer.compare(&expected_serial) {
 		true => Ok((cycle_counter, instant.elapsed())),
-		false => Err(DmgTestError::SerialDifferent(expected_serial.into_iter().map(char::from).collect(), sync_writer.into_inner().into_iter().map(char::from).collect())),
+		false => Err(DmgTestError::SerialDifferent(
+			expected_serial.into_iter().map(char::from).collect(),
+			sync_writer.into_inner().into_iter().map(char::from).collect(),
+		)),
 	}
 }
 
@@ -145,25 +160,27 @@ fn main() {
 	let args = CliArgs::parse();
 
 	match args.operation {
-		Operation::Test { maximum_m_cycles, expected_serial } => match run_test(args.rom.as_path(), maximum_m_cycles, expected_serial.as_path()) {
-			Ok((m_cycles, duration)) => {
-				println!("Success! Ran {} M-Cycles in {}ms", m_cycles, duration.as_millis());
-			},
-			Err(why) => {
-				eprintln!("{}", why);
-				std::process::exit(1);
+		Operation::Test { maximum_m_cycles, expected_serial } => {
+			match run_test(args.rom.as_path(), maximum_m_cycles, expected_serial.as_path()) {
+				Ok((m_cycles, duration)) => {
+					println!("Success! Ran {} M-Cycles in {}ms", m_cycles, duration.as_millis());
+				}
+				Err(why) => {
+					eprintln!("{}", why);
+					std::process::exit(1);
+				}
 			}
-		},
-		Operation::GenerateOutput { m_cycles, expected_serial } => match generate_output(args.rom.as_path(), m_cycles, expected_serial.as_path()) {
-			Ok(duration) => {
-				println!("Successfully written serial output to {} in {} M-Cycles ({}ms), please verify it is correct", expected_serial.display(), m_cycles, duration.as_millis());
-			},
-			Err(why) => {
-				eprintln!("{}", why);
-				std::process::exit(1);
+		}
+		Operation::GenerateOutput { m_cycles, expected_serial } => {
+			match generate_output(args.rom.as_path(), m_cycles, expected_serial.as_path()) {
+				Ok(duration) => {
+					println!("Successfully written serial output to {} in {} M-Cycles ({}ms), please verify it is correct", expected_serial.display(), m_cycles, duration.as_millis());
+				}
+				Err(why) => {
+					eprintln!("{}", why);
+					std::process::exit(1);
+				}
 			}
-		},
+		}
 	}
-
-	
 }

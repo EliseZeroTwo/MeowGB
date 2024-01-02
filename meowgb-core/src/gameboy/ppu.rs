@@ -564,8 +564,7 @@ impl Ppu {
 							oam_entry.y.wrapping_sub(16).wrapping_add(sprite_height as u8);
 
 						if oam_entry.x > 0
-							&& self.ly < real_oam_y
-							&& self.ly >= oam_entry.y.wrapping_sub(16)
+							&& self.ly < real_oam_y && self.ly >= oam_entry.y.wrapping_sub(16)
 							&& self.sprite_count < 10
 						{
 							self.sprite_buffer[self.sprite_count] = Some(oam_entry);
@@ -764,7 +763,8 @@ impl Ppu {
 
 						if self.window_enabled() && wx_match && self.wy_match {
 							window_drawn = true;
-							let window_x = (drawn_pixels as u8).wrapping_sub(self.wx.wrapping_sub(7)) as usize;
+							let window_x =
+								(drawn_pixels as u8).wrapping_sub(self.wx.wrapping_sub(7)) as usize;
 							let window_y = self.ly.wrapping_sub(self.wy) as usize;
 							let tilemap_idx = window_x / 8 + ((window_y / 8) * 32);
 							let tilemap_value = self.read_window_tile_map()[tilemap_idx];
@@ -910,9 +910,10 @@ impl Ppu {
 			}
 		}
 
-		let now = chrono::Utc::now();
+		let now =
+			std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
 		std::fs::create_dir_all("./bmp").unwrap();
-		let file_name = format!("./bmp/fb-{}.bmp", now.timestamp());
+		let file_name = format!("./bmp/fb-{}.bmp", now);
 		image.save(file_name.as_str()).unwrap();
 		file_name
 	}
@@ -945,9 +946,10 @@ impl Ppu {
 			}
 		}
 
-		let now = chrono::Utc::now();
+		let now =
+			std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
 		std::fs::create_dir_all("./bmp").unwrap();
-		let file_name = format!("./bmp/bg-data-{}.bmp", now.timestamp());
+		let file_name = format!("./bmp/bg-data-{}.bmp", now);
 		image.save(file_name.as_str()).unwrap();
 	}
 

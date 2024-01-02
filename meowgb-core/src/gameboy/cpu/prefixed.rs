@@ -1,7 +1,7 @@
 use meowgb_opcode::opcode;
 
 use super::CycleResult;
-use crate::gameboy::{Gameboy, serial::SerialWriter};
+use crate::gameboy::{serial::SerialWriter, Gameboy};
 
 pub fn prefixed_handler(state: &mut Gameboy<impl SerialWriter>) -> CycleResult {
 	let opcode = match state.registers.current_prefixed_opcode {

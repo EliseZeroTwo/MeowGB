@@ -9,6 +9,8 @@ pub mod serial;
 mod sound;
 mod timer;
 
+use std::time::{Duration, Instant};
+
 use interrupts::Interrupts;
 use joypad::Joypad;
 use mapper::Mapper;
@@ -206,7 +208,7 @@ impl<S: SerialWriter> Gameboy<S> {
 		log::info!("\n-- Registers --\nAF: {:04X}\nBC: {:04X}\nDE: {:04X}\nHL: {:04X}\nSP: {:04X}\nPC: {:04X}\nZero: {}\nSubtract: {}\nHalf-Carry: {}\nCarry: {}\n-- Interrupts --\nIME: {}\nIE VBlank: {}\nIE LCD Stat: {}\nIE Timer: {}\nIE Serial: {}\nIE Joypad: {}\nIF VBlank: {}\nIF LCD Stat: {}\nIF Timer: {}\nIF Serial: {}\nIF Joypad: {}\n", self.registers.get_af(), self.registers.get_bc(), self.registers.get_de(), self.registers.get_hl(), self.registers.get_sp(), self.registers.pc, self.registers.get_zero(), self.registers.get_subtract(), self.registers.get_half_carry(), self.registers.get_carry(), self.interrupts.ime, self.interrupts.read_ie_vblank(), self.interrupts.read_ie_lcd_stat(), self.interrupts.read_ie_timer(), self.interrupts.read_ie_serial(), self.interrupts.read_ie_joypad(), self.interrupts.read_if_vblank(), self.interrupts.read_if_lcd_stat(), self.interrupts.read_if_timer(), self.interrupts.read_if_serial(), self.interrupts.read_if_joypad());
 	}
 
-	pub fn tick_4(&mut self) -> (bool, Option<i64>) {
+	pub fn tick_4(&mut self) -> (bool, Option<Duration>) {
 		let mut request_redraw = false;
 		let mut debug_time = None;
 		for _ in 0..4 {
@@ -221,7 +223,7 @@ impl<S: SerialWriter> Gameboy<S> {
 		(request_redraw, debug_time)
 	}
 
-	pub fn tick(&mut self) -> (bool, Option<i64>) {
+	pub fn tick(&mut self) -> (bool, Option<Duration>) {
 		if self.tick_count == 0 {
 			if self.breakpoints[self.registers.pc as usize] && !self.single_step {
 				self.single_step = true;
@@ -231,7 +233,7 @@ impl<S: SerialWriter> Gameboy<S> {
 			let mut diff = None;
 
 			if self.trigger_bp || (self.single_step && self.registers.cycle == 0) {
-				let entered_step = chrono::Utc::now();
+				let entered_step = Instant::now();
 				self.trigger_bp = false;
 				self.single_step = true;
 				let mut input = String::new();
@@ -389,7 +391,7 @@ impl<S: SerialWriter> Gameboy<S> {
 					Err(stdin_err) => panic!("Failed to lock stdin: {:?}", stdin_err),
 				}
 
-				diff = Some((chrono::Utc::now() - entered_step).num_milliseconds());
+				diff = Some(entered_step.elapsed());
 				if exit {
 					return (false, diff);
 				}

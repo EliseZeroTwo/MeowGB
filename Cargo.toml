@@ -1,3 +1,4 @@
 [workspace]
 resolver = "2"
 members = ["meowgb", "meowgb-core", "meowgb-opcode", "meowgb-tests"]
+default-members = ["meowgb"]

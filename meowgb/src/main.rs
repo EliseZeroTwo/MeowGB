@@ -7,9 +7,11 @@ use std::{
 	sync::mpsc::{channel, Receiver, Sender},
 };
 
-use chrono::{Duration, Utc};
 use clap::Parser;
-use meowgb_core::gameboy::{Gameboy, bootrom::{BootromParseError, verify_parse_bootrom}};
+use meowgb_core::gameboy::{
+	bootrom::{verify_parse_bootrom, BootromParseError},
+	Gameboy,
+};
 use settings::DeemgeeConfig;
 use window::EmulatorWindowEvent;
 
@@ -95,7 +97,7 @@ pub fn run_gameboy(
 		gameboy.load_cartridge(rom)
 	}
 
-	let mut goal = chrono::Utc::now() + Duration::milliseconds(1000 / 60);
+	let mut goal = time::OffsetDateTime::now_utc() + time::Duration::milliseconds(1000 / 60);
 	let mut frame_counter = 0;
 
 	'outer: loop {
@@ -127,7 +129,7 @@ pub fn run_gameboy(
 				}
 				window::EmulatorWindowEvent::Exit => break 'outer,
 				window::EmulatorWindowEvent::DumpMemory => {
-					let timestamp = Utc::now().timestamp();
+					let timestamp = time::OffsetDateTime::now_utc().unix_timestamp();
 					let contents = gameboy.dump_memory();
 					std::fs::write(format!("./memdump-{}.bin", timestamp), contents)
 						.expect("Failed to write memory dump");
@@ -138,19 +140,19 @@ pub fn run_gameboy(
 		let (redraw_needed, time_spent_debugging) = gameboy.tick_4();
 
 		if let Some(diff) = time_spent_debugging {
-			goal = goal + Duration::milliseconds(diff);
+			goal = goal + diff;
 		}
 
 		if redraw_needed {
-			let now = chrono::Utc::now();
+			let now = time::OffsetDateTime::now_utc();
 			frame_counter += 1;
 			tx.send(GameboyEvent::Framebuffer(gameboy.ppu.write_fb())).unwrap();
 			let delta = goal - now;
-			let delta_ms = delta.num_milliseconds();
+			let delta_ms = delta.whole_milliseconds();
 			if delta_ms > 0 {
 				std::thread::sleep(std::time::Duration::from_millis(delta_ms as u64));
 			}
-			goal = goal + Duration::milliseconds(1000 / 60);
+			goal = goal + time::Duration::milliseconds(1000 / 60);
 
 			if frame_counter == 60 {
 				log::debug!("Rendered 60 frames");

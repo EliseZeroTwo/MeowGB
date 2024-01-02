@@ -4,7 +4,7 @@ mod load_store_move;
 mod misc;
 mod prefixed;
 
-use super::{Gameboy, serial::SerialWriter};
+use super::{serial::SerialWriter, Gameboy};
 
 macro_rules! define_register {
 	($lident:ident, $rident:ident) => {
