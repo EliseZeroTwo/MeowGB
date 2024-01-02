@@ -10,7 +10,7 @@ fn test_nop() {
 		state
 	};
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers, expected_register_state);
 }
 
@@ -26,7 +26,7 @@ fn test_di() {
 
 	emulator.interrupts.ime = true;
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers, expected_register_state);
 	assert!(!emulator.interrupts.ime);
 }
@@ -43,11 +43,11 @@ fn test_ei() {
 
 	emulator.interrupts.ime = false;
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers, expected_register_state);
 	assert!(!emulator.interrupts.ime);
-	emulator.tick(); // <-- Execute the NOP that comes after as the `EI` instruction only takes
-				 // effect a cycle after
+	emulator.tick_4(); // <-- Execute the NOP that comes after as the `EI` instruction only takes
+				   // effect a cycle after
 	assert!(emulator.interrupts.ime);
 }
 
@@ -63,7 +63,7 @@ fn test_halt() {
 
 	emulator.interrupts.ime = true;
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers, expected_register_state);
 	assert!(emulator.halt);
 }

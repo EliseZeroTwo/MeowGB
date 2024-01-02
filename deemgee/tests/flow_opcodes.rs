@@ -9,11 +9,11 @@ macro_rules! conditional_jump_relative_testgen {
 
 				emulator.registers.[<set_ $flag>](false);
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x103);
 			}
 
@@ -23,9 +23,9 @@ macro_rules! conditional_jump_relative_testgen {
 
 				emulator.registers.[<set_ $flag>](true);
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x102);
 			}
 
@@ -35,11 +35,11 @@ macro_rules! conditional_jump_relative_testgen {
 
 				emulator.registers.[<set_ $flag>](true);
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x103);
 			}
 
@@ -49,9 +49,9 @@ macro_rules! conditional_jump_relative_testgen {
 
 				emulator.registers.[<set_ $flag>](false);
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x102);
 			}
 		}
@@ -65,11 +65,11 @@ conditional_jump_relative_testgen!(carry, 0x30, 0x38);
 fn test_jr_i8() {
 	let mut emulator = setup_test_emulator([0x18, 0x1]);
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x103);
 }
 
@@ -77,13 +77,13 @@ fn test_jr_i8() {
 fn test_jp_u16() {
 	let mut emulator = setup_test_emulator([0xC3, 0xFE, 0xCA]);
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0xCAFE);
 }
 
@@ -93,7 +93,7 @@ fn test_jp_hl() {
 
 	emulator.registers.set_hl(0xCAFE);
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0xCAFE);
 }
 
@@ -106,13 +106,13 @@ macro_rules! conditional_jump_testgen {
 
 				emulator.registers.[<set_ $flag>](false);
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0xCAFE);
 			}
 
@@ -122,11 +122,11 @@ macro_rules! conditional_jump_testgen {
 
 				emulator.registers.[<set_ $flag>](true);
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x103);
 			}
 
@@ -136,13 +136,13 @@ macro_rules! conditional_jump_testgen {
 
 				emulator.registers.[<set_ $flag>](true);
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0xCAFE);
 			}
 
@@ -152,11 +152,11 @@ macro_rules! conditional_jump_testgen {
 
 				emulator.registers.[<set_ $flag>](false);
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x103);
 			}
 		}
@@ -172,19 +172,19 @@ fn test_call_u16() {
 
 	let orignal_sp = emulator.registers.sp;
 
-	emulator.tick(); // <-- Read first u8
+	emulator.tick_4(); // <-- Read first u8
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick(); // <-- Read second u8
+	emulator.tick_4(); // <-- Read second u8
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick(); // <-- Push next instruction PC hi to stack
+	emulator.tick_4(); // <-- Push next instruction PC hi to stack
 	assert_eq!(emulator.registers.sp, orignal_sp - 1);
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick(); // <-- Push next instruction PC lo to stack
+	emulator.tick_4(); // <-- Push next instruction PC lo to stack
 	assert_eq!(emulator.registers.sp, orignal_sp - 2);
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0xCAFE);
 
 	assert_eq!(emulator.debug_read_u8(orignal_sp - 1), 0x01);
@@ -202,19 +202,19 @@ macro_rules! conditional_call_testgen {
 
 				emulator.registers.[<set_ $flag>](false);
 
-				emulator.tick(); // <-- Read first u8
+				emulator.tick_4(); // <-- Read first u8
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Read second u8
+				emulator.tick_4(); // <-- Read second u8
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Check flag
+				emulator.tick_4(); // <-- Check flag
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Push next instruction PC hi to stack
+				emulator.tick_4(); // <-- Push next instruction PC hi to stack
 				assert_eq!(emulator.registers.sp, orignal_sp - 1);
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Push next instruction PC lo to stack
+				emulator.tick_4(); // <-- Push next instruction PC lo to stack
 				assert_eq!(emulator.registers.sp, orignal_sp - 2);
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0xCAFE);
 
 				assert_eq!(emulator.debug_read_u8(orignal_sp - 1), 0x01);
@@ -229,11 +229,11 @@ macro_rules! conditional_call_testgen {
 
 				emulator.registers.[<set_ $flag>](true);
 
-				emulator.tick(); // <-- Read first u8
+				emulator.tick_4(); // <-- Read first u8
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Read second u8
+				emulator.tick_4(); // <-- Read second u8
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Check flag
+				emulator.tick_4(); // <-- Check flag
 				assert_eq!(emulator.registers.pc, 0x103);
 
 				assert_eq!(emulator.registers.sp, orignal_sp);
@@ -247,19 +247,19 @@ macro_rules! conditional_call_testgen {
 
 				emulator.registers.[<set_ $flag>](true);
 
-				emulator.tick(); // <-- Read first u8
+				emulator.tick_4(); // <-- Read first u8
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Read second u8
+				emulator.tick_4(); // <-- Read second u8
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Check flag
+				emulator.tick_4(); // <-- Check flag
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Push next instruction PC hi to stack
+				emulator.tick_4(); // <-- Push next instruction PC hi to stack
 				assert_eq!(emulator.registers.sp, orignal_sp - 1);
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Push next instruction PC lo to stack
+				emulator.tick_4(); // <-- Push next instruction PC lo to stack
 				assert_eq!(emulator.registers.sp, orignal_sp - 2);
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0xCAFE);
 
 				assert_eq!(emulator.debug_read_u8(orignal_sp - 1), 0x01);
@@ -274,11 +274,11 @@ macro_rules! conditional_call_testgen {
 
 				emulator.registers.[<set_ $flag>](false);
 
-				emulator.tick(); // <-- Read first u8
+				emulator.tick_4(); // <-- Read first u8
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Read second u8
+				emulator.tick_4(); // <-- Read second u8
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick(); // <-- Check flag
+				emulator.tick_4(); // <-- Check flag
 				assert_eq!(emulator.registers.pc, 0x103);
 
 				assert_eq!(emulator.registers.sp, orignal_sp);
@@ -301,15 +301,15 @@ fn test_ret() {
 
 	let orignal_sp = emulator.registers.sp;
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
 	assert_eq!(emulator.registers.sp, orignal_sp + 1);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
 	assert_eq!(emulator.registers.sp, orignal_sp + 2);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0xCAFE);
 }
 
@@ -326,15 +326,15 @@ fn test_reti() {
 
 	let orignal_sp = emulator.registers.sp;
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
 	assert_eq!(emulator.registers.sp, orignal_sp + 1);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
 	assert_eq!(emulator.registers.sp, orignal_sp + 2);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.pc, 0xCAFE);
 	assert_eq!(emulator.interrupts.ime, true);
 }
@@ -355,17 +355,17 @@ macro_rules! conditional_ret_testgen {
 
 				let orignal_sp = emulator.registers.sp;
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
 				assert_eq!(emulator.registers.sp, orignal_sp + 1);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
 				assert_eq!(emulator.registers.sp, orignal_sp + 2);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0xCAFE);
 			}
 
@@ -382,9 +382,9 @@ macro_rules! conditional_ret_testgen {
 
 				let orignal_sp = emulator.registers.sp;
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x101);
 				assert_eq!(emulator.registers.sp, orignal_sp);
 			}
@@ -402,17 +402,17 @@ macro_rules! conditional_ret_testgen {
 
 				let orignal_sp = emulator.registers.sp;
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
 				assert_eq!(emulator.registers.sp, orignal_sp + 1);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
 				assert_eq!(emulator.registers.sp, orignal_sp + 2);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0xCAFE);
 			}
 
@@ -429,9 +429,9 @@ macro_rules! conditional_ret_testgen {
 
 				let orignal_sp = emulator.registers.sp;
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, 0x101);
 				assert_eq!(emulator.registers.sp, orignal_sp);
 			}
@@ -451,16 +451,16 @@ macro_rules! rst_testgen {
 
 				let original_sp = emulator.registers.sp;
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.sp, original_sp);
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.sp, original_sp - 1);
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.sp, original_sp - 2);
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.pc, $addr);
 
 				assert_eq!(emulator.debug_read_u8(original_sp - 1), 0x01);

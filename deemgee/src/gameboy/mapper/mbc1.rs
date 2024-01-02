@@ -63,7 +63,7 @@ impl MBC1 {
 	}
 
 	fn is_large_rom(&self) -> bool {
-		self.rom_bank_count > 4
+		self.rom_bank_count >= 64
 	}
 
 	#[allow(unused)]

@@ -3,7 +3,7 @@ mod interrupts;
 mod joypad;
 pub mod mapper;
 mod memory;
-mod ppu;
+pub mod ppu;
 mod serial;
 mod sound;
 mod timer;
@@ -25,18 +25,16 @@ use self::{
 pub struct DmaState {
 	pub base: u8,
 	pub remaining_cycles: u8,
-	pub remaining_delay: u8,
 }
 
 impl DmaState {
 	pub fn new() -> Self {
-		Self { base: 0, remaining_cycles: 0, remaining_delay: 0 }
+		Self { base: 0, remaining_cycles: 0 }
 	}
 
 	pub fn init_request(&mut self, base: u8) {
 		self.base = base;
 		self.remaining_cycles = 0xA0;
-		self.remaining_delay = 2;
 	}
 }
 
@@ -135,6 +133,8 @@ pub struct Gameboy {
 	pub stop: bool,
 
 	pub pc_history: RingBuffer<u16, 0x200>,
+
+	pub tick_count: u8,
 }
 
 impl Gameboy {
@@ -147,7 +147,7 @@ impl Gameboy {
 			joypad: Joypad::new(),
 			serial: Serial::new(),
 			dma: DmaState::new(),
-			ppu: Ppu::new(),
+			ppu: Ppu::new(bootrom.is_some()),
 			registers: match bootrom.is_some() {
 				true => Registers::default(),
 				false => Registers::post_rom(),
@@ -164,6 +164,7 @@ impl Gameboy {
 			used_halt_bug: false,
 			stop: false,
 			pc_history: RingBuffer::new(),
+			tick_count: 0,
 		}
 	}
 
@@ -188,6 +189,9 @@ impl Gameboy {
 	}
 
 	pub fn load_cartridge(&mut self, bytes: Vec<u8>) {
+		if bytes.len() < 0x150 {
+			panic!("Bad cartridge (len < 0x150)");
+		}
 		match bytes[0x147] {
 			0 => self.cartridge = Some(Box::new(NoMBC::new(bytes))),
 			1 => self.cartridge = Some(Box::new(MBC1::new(bytes))),
@@ -201,173 +205,217 @@ impl Gameboy {
 		log::info!("\n-- Registers --\nAF: {:04X}\nBC: {:04X}\nDE: {:04X}\nHL: {:04X}\nSP: {:04X}\nPC: {:04X}\nZero: {}\nSubtract: {}\nHalf-Carry: {}\nCarry: {}\n-- Interrupts --\nIME: {}\nIE VBlank: {}\nIE LCD Stat: {}\nIE Timer: {}\nIE Serial: {}\nIE Joypad: {}\nIF VBlank: {}\nIF LCD Stat: {}\nIF Timer: {}\nIF Serial: {}\nIF Joypad: {}\n", self.registers.get_af(), self.registers.get_bc(), self.registers.get_de(), self.registers.get_hl(), self.registers.get_sp(), self.registers.pc, self.registers.get_zero(), self.registers.get_subtract(), self.registers.get_half_carry(), self.registers.get_carry(), self.interrupts.ime, self.interrupts.read_ie_vblank(), self.interrupts.read_ie_lcd_stat(), self.interrupts.read_ie_timer(), self.interrupts.read_ie_serial(), self.interrupts.read_ie_joypad(), self.interrupts.read_if_vblank(), self.interrupts.read_if_lcd_stat(), self.interrupts.read_if_timer(), self.interrupts.read_if_serial(), self.interrupts.read_if_joypad());
 	}
 
+	pub fn tick_4(&mut self) -> (bool, Option<i64>) {
+		let mut request_redraw = false;
+		let mut debug_time = None;
+		for _ in 0..4 {
+			let (t_request_redraw, t_debug_time) = self.tick();
+			request_redraw |= t_request_redraw;
+			if t_debug_time.is_some() {
+				assert!(debug_time.is_none());
+				debug_time = t_debug_time;
+			}
+		}
+
+		(request_redraw, debug_time)
+	}
+
 	pub fn tick(&mut self) -> (bool, Option<i64>) {
-		if self.breakpoints[self.registers.pc as usize] && !self.single_step {
-			self.single_step = true;
-			log::info!("Breakpoint hit @ {:#X}", self.registers.pc);
-		}
+		if self.tick_count == 0 {
+			if self.breakpoints[self.registers.pc as usize] && !self.single_step {
+				self.single_step = true;
+				log::info!("Breakpoint hit @ {:#X}", self.registers.pc);
+			}
 
-		let mut diff = None;
+			let mut diff = None;
 
-		if self.trigger_bp || (self.single_step && self.registers.cycle == 0) {
-			let entered_step = chrono::Utc::now();
-			self.trigger_bp = false;
-			self.single_step = true;
-			let mut input = String::new();
-			let mut exit = true;
-			match std::io::stdin().read_line(&mut input) {
-				Ok(_) => {
-					let lower = input.trim_end().to_lowercase();
-					let (lhs, rhs) = lower.split_once(' ').unwrap_or_else(|| (lower.as_str(), ""));
-					match lhs {
-						"read" => match u16::from_str_radix(rhs, 16) {
-							Ok(address) => {
-								let res = self.internal_cpu_read_u8(address);
-								log::info!("{:#X}: {:#X} ({:#b})", address, res, res);
-							}
-							Err(_) => log::error!("Failed to parse input as hex u16 (f.ex 420C)"),
-						},
-						"regs" => self.log_state(),
-						"op" => {
-							self.log_next_opcode();
-						}
-						"bp" => match u16::from_str_radix(rhs, 16) {
-							Ok(address) => {
-								let bp = &mut self.breakpoints[address as usize];
-								*bp = !*bp;
-								match *bp {
-									true => log::info!("Set breakpoint @ {:#X}", address),
-									false => log::info!("Cleared breakpoint @ {:#X}", address),
+			if self.trigger_bp || (self.single_step && self.registers.cycle == 0) {
+				let entered_step = chrono::Utc::now();
+				self.trigger_bp = false;
+				self.single_step = true;
+				let mut input = String::new();
+				let mut exit = true;
+				match std::io::stdin().read_line(&mut input) {
+					Ok(_) => {
+						let lower = input.trim_end().to_lowercase();
+						let (lhs, rhs) =
+							lower.split_once(' ').unwrap_or_else(|| (lower.as_str(), ""));
+						match lhs {
+							"read" => match u16::from_str_radix(rhs, 16) {
+								Ok(address) => {
+									let res = self.internal_cpu_read_u8(address);
+									log::info!("{:#X}: {:#X} ({:#b})", address, res, res);
 								}
+								Err(_) => {
+									log::error!("Failed to parse input as hex u16 (f.ex 420C)")
+								}
+							},
+							"regs" => self.log_state(),
+							"op" => {
+								self.log_next_opcode();
 							}
-							Err(_) => log::error!("Failed to parse input as hex u16 (f.ex 420C)"),
-						},
-						"bpr" => match u16::from_str_radix(rhs, 16) {
-							Ok(address) => {
-								let bp = &mut self.mem_read_breakpoints[address as usize];
-								*bp = !*bp;
-								match *bp {
-									true => log::info!("Set breakpoint on read @ {:#X}", address),
-									false => {
-										log::info!("Cleared breakpoint on read @ {:#X}", address)
+							"bp" => match u16::from_str_radix(rhs, 16) {
+								Ok(address) => {
+									let bp = &mut self.breakpoints[address as usize];
+									*bp = !*bp;
+									match *bp {
+										true => log::info!("Set breakpoint @ {:#X}", address),
+										false => log::info!("Cleared breakpoint @ {:#X}", address),
 									}
 								}
-							}
-							Err(_) => log::error!("Failed to parse input as hex u16 (f.ex 420C)"),
-						},
-						"bpw" => match u16::from_str_radix(rhs, 16) {
-							Ok(address) => {
-								let bp = &mut self.mem_write_breakpoints[address as usize];
-								*bp = !*bp;
-								match *bp {
-									true => log::info!("Set breakpoint on write @ {:#X}", address),
-									false => {
-										log::info!("Cleared breakpoint on write @ {:#X}", address)
+								Err(_) => {
+									log::error!("Failed to parse input as hex u16 (f.ex 420C)")
+								}
+							},
+							"bpr" => match u16::from_str_radix(rhs, 16) {
+								Ok(address) => {
+									let bp = &mut self.mem_read_breakpoints[address as usize];
+									*bp = !*bp;
+									match *bp {
+										true => {
+											log::info!("Set breakpoint on read @ {:#X}", address)
+										}
+										false => {
+											log::info!(
+												"Cleared breakpoint on read @ {:#X}",
+												address
+											)
+										}
 									}
 								}
-							}
-							Err(_) => log::error!("Failed to parse input as hex u16 (f.ex 420C)"),
-						},
-						"c" => {
-							self.single_step = false;
-							log::info!("Continuing");
-							exit = false;
-						}
-						"timer" => {
-							println!("-- Timer Info --\n{:#?}\n-- End of Timer Info --", self.timer)
-						}
-						"p" | "pause" => {
-							self.single_step = true;
-							log::info!("Single step activated");
-							exit = false;
-						}
-						"pch" => {
-							println!("-- Start of PC History (new to old) --");
-							for (idx, pc) in self.pc_history.to_vec().iter().rev().enumerate() {
-								println!("{}: {:#04X}", idx + 1, pc);
-							}
-							println!("-- End of PC History --");
-						}
-						"s" | "step" | "" => {
-							self.log_next_opcode();
-							exit = false;
-						}
-						"ls" => {
-							self.log_state();
-							exit = false;
-						}
-						"dumpbgtiles" => {
-							self.ppu.dump_bg_tiles();
-						}
-						"dumpfb" => {
-							println!("Written to: {}", self.ppu.dump_fb());
-						}
-						"dumpoam" => {
-							for x in 0..self.ppu.oam.len() {
-								if x % 0x10 == 0 {
-									print!("\n{:X}: ", 0xFE00 + x)
+								Err(_) => {
+									log::error!("Failed to parse input as hex u16 (f.ex 420C)")
 								}
-
-								let mem_val = self.ppu.oam[x];
-								print!("{:02X} ", mem_val);
-							}
-							println!();
-						}
-						"dumpvram" => {
-							for x in 0..0x200 {
-								if x % 0x10 == 0 {
-									print!("\n{:X}: ", 0x8000 + x)
+							},
+							"bpw" => match u16::from_str_radix(rhs, 16) {
+								Ok(address) => {
+									let bp = &mut self.mem_write_breakpoints[address as usize];
+									*bp = !*bp;
+									match *bp {
+										true => {
+											log::info!("Set breakpoint on write @ {:#X}", address)
+										}
+										false => {
+											log::info!(
+												"Cleared breakpoint on write @ {:#X}",
+												address
+											)
+										}
+									}
 								}
-
-								let mem_val = self.ppu.vram[x];
-								print!("{:02X} ", mem_val);
-							}
-							println!();
-						}
-						"dumptilemap" => {
-							let base = match (self.ppu.lcdc >> 3) & 0b1 == 1 {
-								true => 0x1C00,
-								false => 0x1800,
-							};
-
-							for x in 0..0x400 {
-								if x % 0x10 == 0 {
-									print!("\n{:X}: ", 0x8000 + base + x)
+								Err(_) => {
+									log::error!("Failed to parse input as hex u16 (f.ex 420C)")
 								}
-
-								let mem_val = self.ppu.vram[base + x];
-								print!("{:02X} ", mem_val);
+							},
+							"c" => {
+								self.single_step = false;
+								log::info!("Continuing");
+								exit = false;
 							}
-							println!();
+							"timer" => {
+								println!(
+									"-- Timer Info --\n{:#?}\n-- End of Timer Info --",
+									self.timer
+								)
+							}
+							"p" | "pause" => {
+								self.single_step = true;
+								log::info!("Single step activated");
+								exit = false;
+							}
+							"pch" => {
+								println!("-- Start of PC History (new to old) --");
+								for (idx, pc) in self.pc_history.to_vec().iter().rev().enumerate() {
+									println!("{}: {:#04X}", idx + 1, pc);
+								}
+								println!("-- End of PC History --");
+							}
+							"s" | "step" | "" => {
+								self.log_next_opcode();
+								exit = false;
+							}
+							"ls" => {
+								self.log_state();
+								exit = false;
+							}
+							"dumpbgtiles" => {
+								self.ppu.dump_bg_tiles();
+							}
+							"dumpfb" => {
+								println!("Written to: {}", self.ppu.dump_fb());
+							}
+							"dumpoam" => {
+								for x in 0..self.ppu.oam.len() {
+									if x % 0x10 == 0 {
+										print!("\n{:X}: ", 0xFE00 + x)
+									}
+
+									let mem_val = self.ppu.oam[x];
+									print!("{:02X} ", mem_val);
+								}
+								println!();
+							}
+							"dumpvram" => {
+								for x in 0..0x200 {
+									if x % 0x10 == 0 {
+										print!("\n{:X}: ", 0x8000 + x)
+									}
+
+									let mem_val = self.ppu.vram[x];
+									print!("{:02X} ", mem_val);
+								}
+								println!();
+							}
+							"dumptilemap" => {
+								let base = match (self.ppu.lcdc >> 3) & 0b1 == 1 {
+									true => 0x1C00,
+									false => 0x1800,
+								};
+
+								for x in 0..0x400 {
+									if x % 0x10 == 0 {
+										print!("\n{:X}: ", 0x8000 + base + x)
+									}
+
+									let mem_val = self.ppu.vram[base + x];
+									print!("{:02X} ", mem_val);
+								}
+								println!();
+							}
+							_ => {}
 						}
-						_ => {}
 					}
+					Err(stdin_err) => panic!("Failed to lock stdin: {:?}", stdin_err),
 				}
-				Err(stdin_err) => panic!("Failed to lock stdin: {:?}", stdin_err),
+
+				diff = Some((chrono::Utc::now() - entered_step).num_milliseconds());
+				if exit {
+					return (false, diff);
+				}
+			}
+			if self.timer.tick() {
+				self.interrupts.write_if_timer(true);
 			}
 
-			diff = Some((chrono::Utc::now() - entered_step).num_milliseconds());
-			if exit {
-				return (false, diff);
+			cpu::tick_cpu(self);
+			let redraw_requested = self.ppu.tick(&mut self.interrupts);
+			self.tick_dma();
+			if self.serial.tick() {
+				self.interrupts.write_if_serial(true);
 			}
+			self.tick_count += 1;
+			(redraw_requested, diff)
+		} else {
+			let redraw_requested = self.ppu.tick(&mut self.interrupts);
+			self.tick_count += 1;
+			self.tick_count %= 4;
+			(redraw_requested, None)
 		}
-		if self.timer.tick() {
-			self.interrupts.write_if_timer(true);
-		}
-
-		cpu::tick_cpu(self);
-		let redraw_requested = self.ppu.tick(&mut self.interrupts);
-		self.tick_dma();
-		if self.serial.tick() {
-			self.interrupts.write_if_serial(true);
-		}
-		(redraw_requested, diff)
 	}
 
 	fn tick_dma(&mut self) {
-		if self.dma.remaining_delay > 0 {
-			self.dma.remaining_delay -= 1;
-		} else if self.dma.remaining_cycles > 0 {
+		self.ppu.dma_occuring = self.dma.remaining_cycles > 0;
+		if self.dma.remaining_cycles > 0 {
 			let offset = 0xA0 - self.dma.remaining_cycles;
 
 			let value = if self.dma.base <= 0x7F {
@@ -376,13 +424,14 @@ impl Gameboy {
 					None => 0xFF,
 				}
 			} else if self.dma.base <= 0x9F {
-				self.ppu.dma_read_vram(offset)
+				let address = (((self.dma.base as usize) << 8) | offset as usize) - 0x8000;
+				self.ppu.vram[address]
 			} else if self.dma.base <= 0xDF {
-				let address = (self.dma.base as u16) << 8 | offset as u16;
-				self.memory.wram[address as usize - 0xC000]
+				let address = ((self.dma.base as usize) << 8 | offset as usize) - 0xC000;
+				self.memory.wram[address]
 			} else if self.dma.base <= 0xFD {
-				let address = (self.dma.base as u16) << 8 | offset as u16;
-				self.memory.wram[address as usize - 0xE000]
+				let address = ((self.dma.base as usize) << 8 | offset as usize) - 0xE000;
+				self.memory.wram[address]
 			} else {
 				0xFF
 			};
@@ -430,13 +479,15 @@ impl Gameboy {
 			0xFF27..=0xFF2F => 0xFF,
 			0xFF30..=0xFF3F => self.sound.wave_pattern_ram[address as usize - 0xFF30],
 			0xFF40 => self.ppu.lcdc,
-			0xFF41 => self.ppu.stat,
+			0xFF41 => self.ppu.get_stat(),
 			0xFF42 => self.ppu.scy,
 			0xFF43 => self.ppu.scx,
 			0xFF44 => self.ppu.ly,
 			0xFF45 => self.ppu.lyc,
 			0xFF46 => self.dma.base,
-			0xFF47..=0xFF49 => 0xFF,
+			0xFF47 => self.ppu.bgp.value(),
+			0xFF48 => self.ppu.obp[0].value(),
+			0xFF49 => self.ppu.obp[1].value(),
 			0xFF4A => self.ppu.wy,
 			0xFF4B => self.ppu.wx,
 			0xFF4C..=0xFF4E => 0xFF, // Unused
@@ -489,18 +540,29 @@ impl Gameboy {
 			0xFF26 => self.sound.nr52 = value,
 			0xFF27..=0xFF2F => {}
 			0xFF30..=0xFF3F => self.sound.wave_pattern_ram[address as usize - 0xFF30] = value,
-			0xFF40 => self.ppu.lcdc = value,
-			0xFF41 => self.ppu.cpu_write_stat(value),
+			0xFF40 => {
+				let old_value = self.ppu.lcdc;
+				self.ppu.lcdc = value;
+
+				if value >> 7 == 0 && old_value >> 7 == 1 {
+					self.ppu.stop();
+				} else if value >> 7 == 1 && old_value >> 7 == 0 {
+					self.ppu.start(&mut self.interrupts);
+				}
+			}
+			0xFF41 => self.ppu.set_stat(&mut self.interrupts, value),
 			0xFF42 => self.ppu.scy = value,
 			0xFF43 => self.ppu.scx = value,
 			0xFF44 => {} // LY is read only
-			0xFF45 => self.ppu.lyc = value,
+			0xFF45 => self.ppu.set_lyc(&mut self.interrupts, value),
 			0xFF46 => {
 				if self.dma.remaining_cycles == 0 {
 					self.dma.init_request(value);
 				}
 			}
-			0xFF47..=0xFF49 => {}
+			0xFF47 => self.ppu.bgp.write_bgp(value),
+			0xFF48 => self.ppu.obp[0].write_obp(value),
+			0xFF49 => self.ppu.obp[1].write_obp(value),
 			0xFF4A => self.ppu.wy = value,
 			0xFF4B => self.ppu.wx = value,
 			0xFF4C..=0xFF4E => {} // Unused

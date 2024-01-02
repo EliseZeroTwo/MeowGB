@@ -10,15 +10,15 @@ macro_rules! ld_reg_imm_u16_testgen {
 				emulator.registers.$hireg = 0x00;
 				emulator.registers.$loreg = 0x00;
 
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.$hireg, 0x00);
 				assert_eq!(emulator.registers.$loreg, 0x00);
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.$hireg, 0x00);
 				assert_eq!(emulator.registers.$loreg, 0xFE);
 				assert_eq!(emulator.registers.pc, 0x100);
-				emulator.tick();
+				emulator.tick_4();
 				assert_eq!(emulator.registers.$hireg, 0xCA);
 				assert_eq!(emulator.registers.$loreg, 0xFE);
 				assert_eq!(emulator.registers.pc, 0x103);
@@ -37,13 +37,13 @@ fn test_ld_reg_sp_imm_u16() {
 
 	emulator.registers.sp = 0x0000;
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.sp, 0x0000);
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.sp, 0x00FE);
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.sp, 0xCAFE);
 	assert_eq!(emulator.registers.pc, 0x103);
 }
@@ -55,10 +55,10 @@ fn test_ld_sp_hl() {
 	emulator.registers.sp = 0x0000;
 	emulator.registers.set_hl(0xCAFE);
 
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.sp, 0x00FE);
 	assert_eq!(emulator.registers.pc, 0x100);
-	emulator.tick();
+	emulator.tick_4();
 	assert_eq!(emulator.registers.sp, 0xCAFE);
 	assert_eq!(emulator.registers.pc, 0x101);
 }

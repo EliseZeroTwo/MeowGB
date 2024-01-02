@@ -15,7 +15,7 @@ pub fn setup_test_emulator<const ROM_LENGTH: usize>(
 
 	gameboy.cartridge = Some(Box::new(cartridge));
 
-	gameboy.tick(); // Prefetch instruction
+	gameboy.tick_4(); // Prefetch instruction
 	assert!(gameboy.registers.mem_read_hold.is_some()); // Assert prefetch happened and opcode is now sitting in the memory bus
 	assert_eq!(gameboy.registers.cycle, 0); // Assert tick really did just prefetch instruction and not run the opcode at
 										// all

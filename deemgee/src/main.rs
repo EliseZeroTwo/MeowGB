@@ -171,7 +171,7 @@ pub fn run_gameboy(
 			}
 		}
 
-		let (redraw_needed, time_spent_debugging) = gameboy.tick();
+		let (redraw_needed, time_spent_debugging) = gameboy.tick_4();
 
 		if let Some(diff) = time_spent_debugging {
 			goal = goal + Duration::milliseconds(diff);

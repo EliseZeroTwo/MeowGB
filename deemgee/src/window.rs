@@ -50,9 +50,6 @@ pub enum GameboyEvent {
 	Framebuffer(Vec<u8>),
 }
 
-pub const FB_HEIGHT: u32 = 144;
-pub const FB_WIDTH: u32 = 160;
-
 #[derive(Debug, Default)]
 struct Keymap {
 	pub down: bool,
@@ -108,7 +105,12 @@ pub fn run_window(
 	let mut pixels = {
 		let window_size = window.inner_size();
 		let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-		Pixels::new(FB_WIDTH, FB_HEIGHT, surface_texture).unwrap()
+		Pixels::new(
+			crate::gameboy::ppu::FB_WIDTH,
+			crate::gameboy::ppu::FB_HEIGHT,
+			surface_texture,
+		)
+		.unwrap()
 	};
 
 	let mut redraw_happened = true;

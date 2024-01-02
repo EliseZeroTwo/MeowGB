@@ -2,6 +2,7 @@
 pub enum JoypadMode {
 	Action,
 	Direction,
+	Both,
 }
 
 macro_rules! joypad_input {
@@ -17,6 +18,7 @@ macro_rules! joypad_input {
 	};
 }
 
+#[derive(Debug)]
 pub struct Joypad {
 	mode: JoypadMode,
 	pub down: bool,
@@ -33,7 +35,7 @@ pub struct Joypad {
 impl Joypad {
 	pub fn new() -> Self {
 		Self {
-			mode: JoypadMode::Action,
+			mode: JoypadMode::Direction,
 			down: false,
 			up: false,
 			left: false,
@@ -62,6 +64,7 @@ impl Joypad {
 					| ((!self.left as u8) << 1)
 					| (!self.right as u8)
 			}
+			JoypadMode::Both => 0x3F,
 		}
 	}
 
@@ -77,10 +80,10 @@ impl Joypad {
 	pub fn cpu_write(&mut self, content: u8) {
 		if (content >> 5) & 0b1 == 0 {
 			self.mode = JoypadMode::Action;
-		}
-
-		if (content >> 4) & 0b1 == 0 {
+		} else if (content >> 4) & 0b1 == 0 {
 			self.mode = JoypadMode::Direction;
+		} else {
+			self.mode = JoypadMode::Both;
 		}
 	}
 }

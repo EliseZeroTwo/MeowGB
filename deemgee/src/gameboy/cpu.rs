@@ -188,7 +188,8 @@ pub fn tick_cpu(state: &mut Gameboy) {
 	}
 
 	if state.registers.cycle == 0 && state.interrupts.ei_queued {
-		state.interrupts.cycle_passed = true;
+		state.interrupts.ime = state.interrupts.ei_queued;
+		state.interrupts.ei_queued = false;
 	}
 
 	if state.registers.cycle == 0 && state.halt_bug {
@@ -525,12 +526,6 @@ pub fn tick_cpu(state: &mut Gameboy) {
 	if result == CycleResult::Finished || result == CycleResult::FinishedKeepPc {
 		if state.used_halt_bug {
 			state.registers.pc = state.registers.pc.overflowing_add(1).0;
-		}
-
-		if state.interrupts.cycle_passed && state.interrupts.ei_queued {
-			state.interrupts.cycle_passed = false;
-			state.interrupts.ei_queued = false;
-			state.interrupts.ime = true;
 		}
 
 		if result == CycleResult::Finished {
