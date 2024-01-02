@@ -1,7 +1,7 @@
 use std::{path::{PathBuf, Path}, sync::{RwLock, Arc}, time::{Duration, Instant}};
 
 use clap::{Parser, Subcommand};
-use meowgb::gameboy::{Gameboy, serial::SerialWriter};
+use meowgb_core::gameboy::{Gameboy, serial::SerialWriter};
 
 #[derive(Debug, Parser)]
 /// DMG Emulator

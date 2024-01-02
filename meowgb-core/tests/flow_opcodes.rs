@@ -1,4 +1,4 @@
-use meowgb::setup_test_emulator;
+use meowgb_core::setup_test_emulator;
 
 macro_rules! conditional_jump_relative_testgen {
 	($flag:ident, $not_opcode:literal, $opcode:literal) => {

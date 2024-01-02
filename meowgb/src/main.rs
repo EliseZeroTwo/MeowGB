@@ -1,4 +1,3 @@
-mod gameboy;
 mod settings;
 mod window;
 
@@ -10,7 +9,7 @@ use std::{
 
 use chrono::{Duration, Utc};
 use clap::Parser;
-use gameboy::{Gameboy, bootrom::{BootromParseError, verify_parse_bootrom}};
+use meowgb_core::gameboy::{Gameboy, bootrom::{BootromParseError, verify_parse_bootrom}};
 use settings::DeemgeeConfig;
 use window::EmulatorWindowEvent;
 

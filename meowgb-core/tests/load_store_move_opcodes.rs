@@ -1,4 +1,4 @@
-use meowgb::setup_test_emulator;
+use meowgb_core::setup_test_emulator;
 
 macro_rules! ld_reg_imm_u16_testgen {
 	($hireg:ident, $loreg:ident, $opcode:literal) => {

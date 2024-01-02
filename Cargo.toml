@@ -1,3 +1,3 @@
 [workspace]
 resolver = "2"
-members = ["meowgb", "meowgb-opcode", "meowgb-tests"]
+members = ["meowgb", "meowgb-core", "meowgb-opcode", "meowgb-tests"]

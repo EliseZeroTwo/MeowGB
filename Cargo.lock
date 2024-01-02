@@ -1063,20 +1063,30 @@ checksum = "523dc4f511e55ab87b694dc30d0f820d60906ef06413f93d4d7a1385599cc149"
 name = "meowgb"
 version = "0.1.0"
 dependencies = [
- "bmp",
  "chrono",
  "clap",
  "config",
  "env_logger",
  "log",
- "meowgb-opcode",
- "paste",
+ "meowgb-core",
  "pixels",
  "serde",
- "sha1",
  "thiserror",
  "winit",
  "winit_input_helper",
+]
+
+[[package]]
+name = "meowgb-core"
+version = "0.1.0"
+dependencies = [
+ "bmp",
+ "chrono",
+ "log",
+ "meowgb-opcode",
+ "paste",
+ "sha1",
+ "thiserror",
 ]
 
 [[package]]
@@ -1094,7 +1104,7 @@ name = "meowgb-tests"
 version = "0.1.0"
 dependencies = [
  "clap",
- "meowgb",
+ "meowgb-core",
  "thiserror",
 ]
 

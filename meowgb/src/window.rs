@@ -106,8 +106,8 @@ pub fn run_window(
 		let window_size = window.inner_size();
 		let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
 		Pixels::new(
-			crate::gameboy::ppu::FB_WIDTH,
-			crate::gameboy::ppu::FB_HEIGHT,
+			meowgb_core::gameboy::ppu::FB_WIDTH,
+			meowgb_core::gameboy::ppu::FB_HEIGHT,
 			surface_texture,
 		)
 		.unwrap()

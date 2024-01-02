@@ -1,4 +1,4 @@
-use meowgb::setup_test_emulator;
+use meowgb_core::setup_test_emulator;
 
 #[test]
 fn test_nop() {

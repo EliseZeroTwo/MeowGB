@@ -1,12 +1,8 @@
-use std::io::Stdout;
-
 pub mod gameboy;
-#[allow(unused)]
-mod settings;
 
 pub fn setup_test_emulator<const ROM_LENGTH: usize>(
 	test_opcodes: [u8; ROM_LENGTH],
-) -> gameboy::Gameboy<Stdout> {
+) -> gameboy::Gameboy<std::io::Stdout> {
 	let mut gameboy = gameboy::Gameboy::new(None, std::io::stdout());
 
 	let mut cartridge = gameboy::mapper::NoMBC { rom: [0u8; 0x8000], ram: None };

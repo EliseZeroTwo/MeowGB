@@ -1,0 +1,42 @@
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  main_test:
+    name: Test changes to main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install toolchain
+        run: curl https://sh.rustup.rs -sSf | sh -s -- --profile minimal --default-toolchain stable -y && echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Run cargo tests (meowgb-core)
+        run: cargo test -p meowgb-core
+
+      - name: Run test ROM (blargg cpu_instrs)
+        if: always()
+        run: cargo run --bin meowgb-tests --release -- test-roms/blargg/roms/cpu_instrs.gb test -m 100000000 -s meowgb-tests/expected_output/cpu_instrs.bin
+      
+      - name: Run test ROM (blargg instr_timing)
+        if: always()
+        run: cargo run --bin meowgb-tests --release -- test-roms/blargg/roms/instr_timing.gb test -m 100000000 -s meowgb-tests/expected_output/instr_timing.bin
+
+      - name: Run test ROM (mealybug-tearoom-tests intr_1_2_timing)
+        if: always()
+        run: cargo run --bin meowgb-tests --release -- test-roms/mealybug-tearoom-tests/roms/intr_1_2_timing-GS.gb test -m 100000000 -s meowgb-tests/expected_output/intr_1_2_timing-GS.bin
+
+      - name: Run test ROM (mealybug-tearoom-tests intr_2_0_timing)
+        if: always()
+        run: cargo run --bin meowgb-tests --release -- test-roms/mealybug-tearoom-tests/roms/intr_2_0_timing.gb test -m 100000000 -s meowgb-tests/expected_output/intr_2_0_timing.bin
+
+      - name: Run test ROM (mealybug-tearoom-tests stat_lyc_onoff)
+        if: always()
+        run: cargo run --bin meowgb-tests --release -- test-roms/mealybug-tearoom-tests/roms/stat_lyc_onoff.gb test -m 100000000 -s meowgb-tests/expected_output/stat_lyc_onoff.bin
+      
+      - name: Run test ROM (mealybug-tearoom-tests stat_irq_blocking)
+        if: always()
+        run: cargo run --bin meowgb-tests --release -- test-roms/mealybug-tearoom-tests/roms/stat_irq_blocking.gb test -m 100000000 -s meowgb-tests/expected_output/stat_irq_blocking.bin
