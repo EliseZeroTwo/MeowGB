@@ -70,3 +70,7 @@ An example configuration file can be found in [config.example.toml](./config.exa
 
 This software is currently licensed under the [CNPLv7+](./LICENSE.md), a summary of which can be found at [here](https://thufie.lain.haus/NPL.html).
 The contents of the `test-roms` folder is excluded from this, and the original license of the test ROMs are placed in their respective subdirectory, they are not compiled into any of the software, they are included in the repository purely for intergration testing in CI.
+
+## Dependency Version Notice
+
+The frontend uses old versions of `winit` and `egui` related libraries, this is due to incompatibility between more modern versions of the underlying crates with `egui`, `pixels`, and `winit`. In order to upgrade them, these compatibility issues need to be fixed by them.

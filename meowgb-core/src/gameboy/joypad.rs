@@ -12,7 +12,15 @@ macro_rules! joypad_input {
 				if val && self.mode == JoypadMode::$mode {
 					self.interrupt_triggered = true;
 				}
-				self.$input = val
+				self.$input = val;
+			}
+
+			pub fn [<invert_ $input>](&mut self) {
+				let val = !self.$input;
+				if val && self.mode == JoypadMode::$mode {
+					self.interrupt_triggered = true;
+				}
+				self.$input = val;
 			}
 		}
 	};

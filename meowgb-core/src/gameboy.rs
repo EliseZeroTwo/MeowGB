@@ -1,13 +1,13 @@
 pub mod bootrom;
-mod cpu;
-mod interrupts;
-mod joypad;
+pub mod cpu;
+pub mod interrupts;
+pub mod joypad;
 pub mod mapper;
-mod memory;
+pub mod memory;
 pub mod ppu;
 pub mod serial;
-mod sound;
-mod timer;
+pub mod sound;
+pub mod timer;
 
 use std::time::{Duration, Instant};
 
@@ -115,7 +115,7 @@ fn test_ringbuffer() {
 pub struct Gameboy<S: SerialWriter> {
 	pub ppu: Ppu,
 	pub memory: Memory,
-	pub cartridge: Option<Box<dyn Mapper>>,
+	pub cartridge: Option<Box<dyn Mapper + Send + Sync>>,
 	pub interrupts: Interrupts,
 	pub timer: Timer,
 	pub registers: Registers,
@@ -370,7 +370,7 @@ impl<S: SerialWriter> Gameboy<S> {
 								println!();
 							}
 							"dumptilemap" => {
-								let base = match (self.ppu.lcdc >> 3) & 0b1 == 1 {
+								let base = match (self.ppu.registers.lcdc >> 3) & 0b1 == 1 {
 									true => 0x1C00,
 									false => 0x1800,
 								};
@@ -481,18 +481,18 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFF26 => self.sound.nr52,
 			0xFF27..=0xFF2F => 0xFF,
 			0xFF30..=0xFF3F => self.sound.wave_pattern_ram[address as usize - 0xFF30],
-			0xFF40 => self.ppu.lcdc,
+			0xFF40 => self.ppu.registers.lcdc,
 			0xFF41 => self.ppu.get_stat(),
-			0xFF42 => self.ppu.scy,
-			0xFF43 => self.ppu.scx,
-			0xFF44 => self.ppu.ly,
-			0xFF45 => self.ppu.lyc,
+			0xFF42 => self.ppu.registers.scy,
+			0xFF43 => self.ppu.registers.scx,
+			0xFF44 => self.ppu.registers.ly,
+			0xFF45 => self.ppu.registers.lyc,
 			0xFF46 => self.dma.base,
 			0xFF47 => self.ppu.bgp.value(),
 			0xFF48 => self.ppu.obp[0].value(),
 			0xFF49 => self.ppu.obp[1].value(),
-			0xFF4A => self.ppu.wy,
-			0xFF4B => self.ppu.wx,
+			0xFF4A => self.ppu.registers.wy,
+			0xFF4B => self.ppu.registers.wx,
 			0xFF4C..=0xFF4E => 0xFF, // Unused
 			0xFF4F => 0xFF,          // CGB VRAM Bank Select
 			0xFF50 => self.memory.bootrom_disabled as u8,
@@ -544,8 +544,8 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFF27..=0xFF2F => {}
 			0xFF30..=0xFF3F => self.sound.wave_pattern_ram[address as usize - 0xFF30] = value,
 			0xFF40 => {
-				let old_value = self.ppu.lcdc;
-				self.ppu.lcdc = value;
+				let old_value = self.ppu.registers.lcdc;
+				self.ppu.registers.lcdc = value;
 
 				if value >> 7 == 0 && old_value >> 7 == 1 {
 					self.ppu.stop();
@@ -554,8 +554,8 @@ impl<S: SerialWriter> Gameboy<S> {
 				}
 			}
 			0xFF41 => self.ppu.set_stat(&mut self.interrupts, value),
-			0xFF42 => self.ppu.scy = value,
-			0xFF43 => self.ppu.scx = value,
+			0xFF42 => self.ppu.registers.scy = value,
+			0xFF43 => self.ppu.registers.scx = value,
 			0xFF44 => {} // LY is read only
 			0xFF45 => self.ppu.set_lyc(&mut self.interrupts, value),
 			0xFF46 => {
@@ -566,8 +566,8 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFF47 => self.ppu.bgp.write_bgp(value),
 			0xFF48 => self.ppu.obp[0].write_obp(value),
 			0xFF49 => self.ppu.obp[1].write_obp(value),
-			0xFF4A => self.ppu.wy = value,
-			0xFF4B => self.ppu.wx = value,
+			0xFF4A => self.ppu.registers.wy = value,
+			0xFF4B => self.ppu.registers.wx = value,
 			0xFF4C..=0xFF4E => {} // Unused
 			0xFF4F => {}          // CGB VRAM Bank Select
 			0xFF50 => {

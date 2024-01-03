@@ -2,6 +2,7 @@ use super::interrupts::Interrupts;
 
 pub const FB_HEIGHT: u32 = 144;
 pub const FB_WIDTH: u32 = 160;
+pub const PIXEL_SIZE: usize = 4; // RGBA
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Palette {
@@ -108,12 +109,12 @@ pub enum Color {
 }
 
 impl Color {
-	const WHITE: [u8; 4] = [0xe0, 0xf8, 0xd0, 0xFF];
-	const LGRAY: [u8; 4] = [0x88, 0xc0, 0x70, 0xFF];
-	const DGRAY: [u8; 4] = [0x34, 0x68, 0x56, 0xFF];
-	const BLACK: [u8; 4] = [0x08, 0x18, 0x20, 0xFF];
-	const TRANSPARENT: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
-	pub fn rgba(self) -> &'static [u8; 4] {
+	const WHITE: [u8; PIXEL_SIZE] = [0xe0, 0xf8, 0xd0, 0xFF];
+	const LGRAY: [u8; PIXEL_SIZE] = [0x88, 0xc0, 0x70, 0xFF];
+	const DGRAY: [u8; PIXEL_SIZE] = [0x34, 0x68, 0x56, 0xFF];
+	const BLACK: [u8; PIXEL_SIZE] = [0x08, 0x18, 0x20, 0xFF];
+	const TRANSPARENT: [u8; PIXEL_SIZE] = [0x00, 0x00, 0x00, 0x00];
+	pub fn rgba(self) -> &'static [u8; PIXEL_SIZE] {
 		match self {
 			Color::White => &Self::WHITE,
 			Color::LGray => &Self::LGRAY,
@@ -124,7 +125,7 @@ impl Color {
 	}
 
 	#[allow(unused)]
-	pub fn from_rgba(rgba: [u8; 4]) -> Option<Self> {
+	pub fn from_rgba(rgba: [u8; PIXEL_SIZE]) -> Option<Self> {
 		match rgba {
 			Self::WHITE => Some(Self::White),
 			Self::LGRAY => Some(Self::LGray),
@@ -259,27 +260,30 @@ impl StatFlags {
 	}
 }
 
-pub struct Ppu {
+#[derive(Debug, Clone, Copy)]
+pub struct PpuRegisters {
 	pub lcdc: u8,
-	stat_flags: StatFlags,
-	mode: PPUMode,
+	pub stat_flags: StatFlags,
+	pub mode: PPUMode,
 	pub scy: u8,
 	pub scx: u8,
 	pub ly: u8,
 	pub lyc: u8,
 	pub wy: u8,
 	pub wx: u8,
+	pub ly_lyc: bool,
+}
 
+pub struct Ppu {
+	pub registers: PpuRegisters,
 	pub vram: [u8; 0x2000],
 	pub oam: [u8; 0xA0],
 
 	pub bgp: Palette,
 	pub obp: [Palette; 2],
 
-	pub framebuffer: WrappedBuffer<{ 160 * 144 * 4 }>,
-	pub sprite_framebuffer: WrappedBuffer<{ 160 * 144 * 4 }>,
-
-	ly_lyc: bool,
+	pub framebuffer: WrappedBuffer<{ FB_WIDTH as usize * FB_HEIGHT as usize * PIXEL_SIZE }>,
+	pub sprite_framebuffer: WrappedBuffer<{ FB_WIDTH as usize * FB_HEIGHT as usize * PIXEL_SIZE }>,
 
 	// Internals
 	current_dot: u16,
@@ -308,7 +312,7 @@ impl Ppu {
 		self.sprite_count = 0;
 		self.current_draw_state = None;
 		self.wy_match = false;
-		self.mode = PPUMode::HBlank;
+		self.registers.mode = PPUMode::HBlank;
 		self.first_frame = true;
 		self.first_line = true;
 		self.total_dots = 0;
@@ -320,23 +324,24 @@ impl Ppu {
 
 	pub fn new(bootrom_ran: bool) -> Self {
 		Self {
-			lcdc: (!bootrom_ran).then_some(0b1000_0000).unwrap_or_default(),
-			stat_flags: StatFlags::default(),
-			mode: PPUMode::HBlank,
-			scy: 0,
-			scx: 0,
-			ly: 0,
-			lyc: 0,
-			wy: 0,
-			wx: 0,
+			registers: PpuRegisters {
+				lcdc: (!bootrom_ran).then_some(0b1000_0000).unwrap_or_default(),
+				stat_flags: StatFlags::default(),
+				mode: PPUMode::HBlank,
+				scy: 0,
+				scx: 0,
+				ly: 0,
+				lyc: 0,
+				wy: 0,
+				wx: 0,
+				ly_lyc: true,
+			},
 			vram: [0; 0x2000],
 			oam: [0; 0xA0],
 			framebuffer: WrappedBuffer::empty(),
 			sprite_framebuffer: WrappedBuffer::empty(),
 			bgp: Palette::new_bgp(),
 			obp: [Palette::new_obp(), Palette::new_obp()],
-
-			ly_lyc: true,
 
 			current_dot: 0,
 			dot_target: 0,
@@ -356,17 +361,19 @@ impl Ppu {
 		if self.enabled() {
 			let old_irq_high = self.is_irq_high;
 
-			let stat_int = match self.mode {
-				PPUMode::HBlank => self.stat_flags.mode0_int,
-				PPUMode::VBlank => self.stat_flags.mode1_int,
-				PPUMode::SearchingOAM => self.stat_flags.mode2_int,
+			let stat_int = match self.registers.mode {
+				PPUMode::HBlank => self.registers.stat_flags.mode0_int,
+				PPUMode::VBlank => self.registers.stat_flags.mode1_int,
+				PPUMode::SearchingOAM => self.registers.stat_flags.mode2_int,
 				PPUMode::TransferringData => false,
 			};
 
-			let vblank_causing_oam_int_bug =
-				self.mode == PPUMode::VBlank && self.ly == 144 && self.stat_flags.mode2_int;
+			let vblank_causing_oam_int_bug = self.registers.mode == PPUMode::VBlank
+				&& self.registers.ly == 144
+				&& self.registers.stat_flags.mode2_int;
 
-			let ly_eq_lyc_int = self.ly == self.lyc && self.stat_flags.lyc_int;
+			let ly_eq_lyc_int =
+				self.registers.ly == self.registers.lyc && self.registers.stat_flags.lyc_int;
 
 			self.is_irq_high = stat_int || ly_eq_lyc_int || vblank_causing_oam_int_bug;
 
@@ -377,48 +384,51 @@ impl Ppu {
 	}
 
 	pub fn set_lyc(&mut self, interrupts: &mut Interrupts, value: u8) {
-		if self.lyc != value {
-			self.lyc = value;
+		if self.registers.lyc != value {
+			self.registers.lyc = value;
 			if self.enabled() {
 				self.handle_stat_irq(interrupts);
-				self.ly_lyc = self.ly == self.lyc;
+				self.registers.ly_lyc = self.registers.ly == self.registers.lyc;
 			}
 		}
 	}
 
 	pub fn get_stat(&self) -> u8 {
 		let ly_eq_lyc = match self.enabled() {
-			true => self.ly == self.lyc,
-			false => self.ly_lyc,
+			true => self.registers.ly == self.registers.lyc,
+			false => self.registers.ly_lyc,
 		};
-		(1 << 7) | self.stat_flags.flag_bits() | ((ly_eq_lyc as u8) << 2) | self.mode().mode_flag()
+		(1 << 7)
+			| self.registers.stat_flags.flag_bits()
+			| ((ly_eq_lyc as u8) << 2)
+			| self.mode().mode_flag()
 	}
 
 	pub fn set_stat(&mut self, interrupts: &mut Interrupts, value: u8) {
-		self.stat_flags.from_bits(value);
+		self.registers.stat_flags.from_bits(value);
 		self.handle_stat_irq(interrupts);
 	}
 
 	pub fn sprite_height(&self) -> SpriteHeight {
-		match (self.lcdc >> 2) == 1 {
+		match (self.registers.lcdc >> 2) == 1 {
 			false => SpriteHeight::Eight,
 			true => SpriteHeight::Sixteen,
 		}
 	}
 
 	pub fn mode(&self) -> PPUMode {
-		self.mode
+		self.registers.mode
 	}
 
 	pub fn read_window_tile_map(&self) -> &[u8] {
-		match (self.lcdc >> 6) & 0b1 == 1 {
+		match (self.registers.lcdc >> 6) & 0b1 == 1 {
 			true => &self.vram[0x1C00..=0x1FFF],
 			false => &self.vram[0x1800..=0x1BFF],
 		}
 	}
 
 	pub fn read_tile_map(&self) -> &[u8] {
-		match (self.lcdc >> 3) & 0b1 == 1 {
+		match (self.registers.lcdc >> 3) & 0b1 == 1 {
 			true => &self.vram[0x1C00..=0x1FFF],
 			false => &self.vram[0x1800..=0x1BFF],
 		}
@@ -499,7 +509,7 @@ impl Ppu {
 	}
 
 	pub fn enabled(&self) -> bool {
-		(self.lcdc >> 7) == 1
+		(self.registers.lcdc >> 7) == 1
 	}
 
 	pub fn set_mode(&mut self, interrupts: &mut Interrupts, mode: PPUMode) {
@@ -513,14 +523,14 @@ impl Ppu {
 		} else if mode == PPUMode::TransferringData {
 			if !self.first_frame {
 				assert_eq!(self.mode(), PPUMode::SearchingOAM);
-			} else if self.ly == 0 {
+			} else if self.registers.ly == 0 {
 				assert_eq!(self.mode(), PPUMode::HBlank);
 			}
 			self.current_draw_state = None;
 			self.dot_target = 160 + 12;
 		}
 
-		self.mode = mode;
+		self.registers.mode = mode;
 		self.current_dot = 0;
 
 		self.handle_stat_irq(interrupts);
@@ -531,9 +541,9 @@ impl Ppu {
 	}
 
 	fn set_scanline(&mut self, interrupts: &mut Interrupts, scanline: u8) {
-		self.ly = scanline;
+		self.registers.ly = scanline;
 		self.handle_stat_irq(interrupts);
-		self.ly_lyc = self.ly == self.lyc;
+		self.registers.ly_lyc = self.registers.ly == self.registers.lyc;
 	}
 
 	pub fn tick(&mut self, interrupts: &mut Interrupts) -> bool {
@@ -541,8 +551,8 @@ impl Ppu {
 			match self.mode() {
 				PPUMode::SearchingOAM => {
 					if self.current_dot == 0 {
-						if self.ly == 0 {
-							self.wy_match = self.wy == self.ly;
+						if self.registers.ly == 0 {
+							self.wy_match = self.registers.wy == self.registers.ly;
 						}
 						self.sprite_buffer = [None; 10];
 						self.sprite_count = 0;
@@ -564,7 +574,8 @@ impl Ppu {
 							oam_entry.y.wrapping_sub(16).wrapping_add(sprite_height as u8);
 
 						if oam_entry.x > 0
-							&& self.ly < real_oam_y && self.ly >= oam_entry.y.wrapping_sub(16)
+							&& self.registers.ly < real_oam_y
+							&& self.registers.ly >= oam_entry.y.wrapping_sub(16)
 							&& self.sprite_count < 10
 						{
 							self.sprite_buffer[self.sprite_count] = Some(oam_entry);
@@ -623,7 +634,7 @@ impl Ppu {
 						// self.handle_stat_irq(interrupts, false);
 						self.set_mode(interrupts, PPUMode::TransferringData);
 					} else if self.dot_target != 0 && self.current_dot == self.dot_target {
-						self.set_scanline(interrupts, self.ly + 1);
+						self.set_scanline(interrupts, self.registers.ly + 1);
 
 						assert_eq!(
 							self.total_dots,
@@ -635,7 +646,7 @@ impl Ppu {
 						self.total_dots = 0;
 						self.first_line = false;
 
-						let next_mode = match self.ly > 143 {
+						let next_mode = match self.registers.ly > 143 {
 							true => PPUMode::VBlank,
 							false => PPUMode::SearchingOAM,
 						};
@@ -653,13 +664,13 @@ impl Ppu {
 				}
 				PPUMode::VBlank => {
 					if self.current_dot != 0 && self.current_dot % 456 == 0 {
-						if self.ly >= 153 {
+						if self.registers.ly >= 153 {
 							self.set_scanline(interrupts, 0);
 							self.set_mode(interrupts, PPUMode::SearchingOAM);
 							self.first_frame = false;
 							true
 						} else {
-							self.set_scanline(interrupts, self.ly + 1);
+							self.set_scanline(interrupts, self.registers.ly + 1);
 							self.current_dot += 1;
 							false
 						}
@@ -685,7 +696,7 @@ impl Ppu {
 	fn clear_line_sprite_fb(&mut self, real_line_number: usize) {
 		assert!(real_line_number < FB_HEIGHT as usize);
 		for value in 0..256 {
-			let idx = ((real_line_number * FB_WIDTH as usize) + value) * 4;
+			let idx = ((real_line_number * FB_WIDTH as usize) + value) * PIXEL_SIZE;
 			self.sprite_framebuffer[idx] = 0;
 			self.sprite_framebuffer[idx + 1] = 0;
 			self.sprite_framebuffer[idx + 2] = 0;
@@ -697,22 +708,22 @@ impl Ppu {
 		let state = match self.current_draw_state.take() {
 			Some(state) => state,
 			None => {
-				let scrolling_delay = self.scx % 8;
+				let scrolling_delay = self.registers.scx % 8;
 				self.dot_target += scrolling_delay as u16;
 				if scrolling_delay != 0 {
 					LineDrawingState::BackgroundScrolling(
 						scrolling_delay as usize,
-						self.scx,
-						self.scy,
+						self.registers.scx,
+						self.registers.scy,
 					)
 				} else {
-					self.clear_line_sprite_fb(self.ly as usize);
+					self.clear_line_sprite_fb(self.registers.ly as usize);
 					LineDrawingState::BackgroundAndObjectFifo(
-						self.scx,
-						self.scy,
+						self.registers.scx,
+						self.registers.scy,
 						0,
 						false,
-						self.lcdc & 0b1 == 0,
+						self.registers.lcdc & 0b1 == 0,
 					)
 				}
 			}
@@ -731,9 +742,9 @@ impl Ppu {
 						scy,
 						0,
 						false,
-						self.lcdc & 0b1 == 0,
+						self.registers.lcdc & 0b1 == 0,
 					));
-					self.clear_line_sprite_fb(self.ly as usize);
+					self.clear_line_sprite_fb(self.registers.ly as usize);
 				}
 			}
 			LineDrawingState::BackgroundAndObjectFifo(
@@ -743,10 +754,10 @@ impl Ppu {
 				mut window_drawn,
 				draw_only_sprites,
 			) => {
-				// assert_eq!(scy, self.scy);
-				// assert_eq!(scx, self.scx);
-				let wx_match = (drawn_pixels as usize + 7) >= self.wx as usize;
-				let scrolled_y = self.ly.wrapping_add(scy) as usize;
+				// assert_eq!(scy, self.registers.scy);
+				// assert_eq!(scx, self.registers.scx);
+				let wx_match = (drawn_pixels as usize + 7) >= self.registers.wx as usize;
+				let scrolled_y = self.registers.ly.wrapping_add(scy) as usize;
 				let scrolled_x = drawn_pixels.wrapping_add(scx) as usize;
 
 				let (bg_color_id, bg_color) = match draw_only_sprites {
@@ -763,9 +774,11 @@ impl Ppu {
 
 						if self.window_enabled() && wx_match && self.wy_match {
 							window_drawn = true;
-							let window_x =
-								(drawn_pixels as u8).wrapping_sub(self.wx.wrapping_sub(7)) as usize;
-							let window_y = self.ly.wrapping_sub(self.wy) as usize;
+							let window_x = (drawn_pixels as u8)
+								.wrapping_sub(self.registers.wx.wrapping_sub(7))
+								as usize;
+							let window_y =
+								self.registers.ly.wrapping_sub(self.registers.wy) as usize;
 							let tilemap_idx = window_x / 8 + ((window_y / 8) * 32);
 							let tilemap_value = self.read_window_tile_map()[tilemap_idx];
 							(bg_color_id, bg_color) = Self::parse_tile_color(
@@ -780,8 +793,9 @@ impl Ppu {
 					}
 				};
 
-				let framebuffer_offset =
-					((self.ly as usize * FB_WIDTH as usize) + drawn_pixels as usize) * 4;
+				let framebuffer_offset = ((self.registers.ly as usize * FB_WIDTH as usize)
+					+ drawn_pixels as usize)
+					* PIXEL_SIZE;
 				for (idx, byte) in bg_color.rgba().iter().enumerate() {
 					self.framebuffer[framebuffer_offset + idx] = *byte;
 				}
@@ -795,7 +809,8 @@ impl Ppu {
 
 					let x_valid =
 						drawn_pixels < sprite.x && drawn_pixels.wrapping_add(8) >= sprite.x;
-					let y_valid = self.ly < sprite.y && self.ly.wrapping_add(16) >= sprite.y;
+					let y_valid = self.registers.ly < sprite.y
+						&& self.registers.ly.wrapping_add(16) >= sprite.y;
 
 					if x_valid && y_valid {
 						sprite_buffer.push(*sprite);
@@ -808,7 +823,8 @@ impl Ppu {
 				for sprite in &sprite_buffer {
 					let mut sprite_x_idx =
 						drawn_pixels.wrapping_sub(sprite.x.wrapping_sub(8)) as usize;
-					let mut sprite_y_idx = self.ly.wrapping_sub(sprite.y.wrapping_sub(16)) as usize;
+					let mut sprite_y_idx =
+						self.registers.ly.wrapping_sub(sprite.y.wrapping_sub(16)) as usize;
 
 					let tile_idx = match self.sprite_height() {
 						SpriteHeight::Eight => sprite.tile_idx,
@@ -865,14 +881,14 @@ impl Ppu {
 	}
 
 	pub fn window_enabled(&self) -> bool {
-		((self.lcdc >> 5) & 0b1) == 1
+		((self.registers.lcdc >> 5) & 0b1) == 1
 	}
 
 	pub fn write_fb(&self) -> Vec<u8> {
 		let mut out = self.framebuffer.0.to_vec();
 
-		for x in 0..(160 * 144) {
-			let idx = x * 4;
+		for x in 0..(FB_WIDTH * FB_HEIGHT) {
+			let idx = x as usize * PIXEL_SIZE;
 
 			let (r, g, b, a) = (
 				self.sprite_framebuffer[idx],
@@ -897,7 +913,7 @@ impl Ppu {
 
 		for y in 0..FB_HEIGHT {
 			for x in 0..FB_WIDTH {
-				let base = ((y as usize * FB_WIDTH as usize) + x as usize) * 4;
+				let base = ((y as usize * FB_WIDTH as usize) + x as usize) * PIXEL_SIZE;
 				image.set_pixel(
 					x,
 					y,
@@ -954,7 +970,7 @@ impl Ppu {
 	}
 
 	pub fn read_bg_win_tile(&self, idx: u8) -> &[u8] {
-		if (self.lcdc >> 4) & 0b1 == 1 {
+		if (self.registers.lcdc >> 4) & 0b1 == 1 {
 			&self.vram[idx as usize * 16..((idx as usize + 1) * 16)]
 		} else if idx < 128 {
 			&self.vram[0x1000 + (idx as usize * 16)..0x1000 + ((idx as usize + 1) * 16)]

@@ -43,7 +43,7 @@ pub enum CycleResult {
 	FinishedKeepPc,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Registers {
 	pub a: u8,
 	pub f: u8,

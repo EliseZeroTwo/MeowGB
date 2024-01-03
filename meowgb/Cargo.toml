@@ -12,9 +12,13 @@ env_logger = "0.10.1"
 pixels = "0.13.0"
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.30"
-winit = { version = "0.29.7", default-features = false, features = ["serde", "rwh_05"] }
-winit_input_helper = "0.15.1"
+winit = { version = "0.28.0", features = ["serde"] }
+egui = "0.22"
+egui-wgpu = "0.22"
+egui-winit = { version = "0.22", default-features = false, features = ["links"] }
+winit_input_helper = "0.14.1"
 log = "0.4.20"
 time = "0.3.31"
 home = "0.5.9"
 toml = "0.8.8"
+egui_extras = "0.22"

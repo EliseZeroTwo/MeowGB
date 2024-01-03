@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use toml::Value;
-use winit::keyboard::KeyCode;
+use winit::event::VirtualKeyCode;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -23,8 +23,9 @@ impl ConfigParser {
 	}
 
 	fn parse_toml(path: &Path) -> Result<toml::Table> {
-		let file_exists = std::fs::metadata(path).as_ref().map(std::fs::Metadata::is_file).unwrap_or_default();
-		
+		let file_exists =
+			std::fs::metadata(path).as_ref().map(std::fs::Metadata::is_file).unwrap_or_default();
+
 		if !file_exists {
 			return Err(ConfigError::SourceNotFound);
 		}
@@ -34,8 +35,9 @@ impl ConfigParser {
 		toml::from_str(source_string.as_str()).map_err(ConfigError::Toml)
 	}
 
-	/// Merges two values, if both of the values aren't [Value::Table], `new` is returned.
-	/// Otherwise contents of `new` are placed ontop of contents of `original`, recursively
+	/// Merges two values, if both of the values aren't [Value::Table], `new` is
+	/// returned. Otherwise contents of `new` are placed ontop of contents of
+	/// `original`, recursively
 	fn merge_toml(original: Value, new: Value) -> Value {
 		match (original, new) {
 			(Value::Table(mut original), Value::Table(new)) => {
@@ -47,17 +49,18 @@ impl ConfigParser {
 					original.insert(k, value);
 				}
 				Value::Table(original)
-			},
-			(_, new) => new
-		} 
+			}
+			(_, new) => new,
+		}
 	}
 
-	/// If file at `path` exists, it merges with the existing config overriding any duplicate keys
+	/// If file at `path` exists, it merges with the existing config overriding
+	/// any duplicate keys
 	pub fn merge_exists(mut self, path: &Path) -> Result<Self> {
 		let toml = match Self::parse_toml(path) {
 			Ok(toml) => toml,
 			Err(ConfigError::SourceNotFound) => return Ok(self),
-			Err(why) => return Err(why)
+			Err(why) => return Err(why),
 		};
 
 		self.0 = match Self::merge_toml(Value::Table(self.0), Value::Table(toml)) {
@@ -69,7 +72,7 @@ impl ConfigParser {
 	}
 
 	pub fn build<T: serde::de::DeserializeOwned>(self) -> Result<T> {
-		toml::from_str(dbg!(self.0.to_string()).as_str()).map_err(ConfigError::Toml)
+		toml::from_str(self.0.to_string().as_str()).map_err(ConfigError::Toml)
 	}
 }
 
@@ -82,21 +85,24 @@ impl MeowGBConfig {
 	pub fn from_file() -> Result<Self> {
 		let mut builder = ConfigParser::new(Some(toml::toml! {
 			[bindings]
-			a = "KeyA"
-			b = "KeyS"
-			select = "KeyQ"
-			start = "KeyW"
-			up = "ArrowUp"
-			down = "ArrowDown"
-			left = "ArrowLeft"
-			right = "ArrowRight"
-			pause = "KeyP"
+			a = "A"
+			b = "S"
+			select = "Q"
+			start = "W"
+			up = "Up"
+			down = "Down"
+			left = "Left"
+			right = "Right"
+			pause = "P"
 			exit = "Escape"
-			log_ops = "KeyL"
+			log_ops = "L"
 			dump_memory = "Comma"
 		}));
 
-		if let Some(path) = home::home_dir().and_then(|mut path| { path.push(".MeowGB/config.toml"); path.to_str().map(String::from) }) {
+		if let Some(path) = home::home_dir().and_then(|mut path| {
+			path.push(".MeowGB/config.toml");
+			path.to_str().map(String::from)
+		}) {
 			builder = builder.merge_exists(path.as_ref())?;
 		}
 
@@ -106,15 +112,17 @@ impl MeowGBConfig {
 
 #[derive(Debug, serde::Deserialize, Clone, Copy)]
 pub struct Bindings {
-	pub a: KeyCode,
-	pub b: KeyCode,
-	pub select: KeyCode,
-	pub start: KeyCode,
-	pub up: KeyCode,
-	pub down: KeyCode,
-	pub left: KeyCode,
-	pub right: KeyCode,
+	pub a: VirtualKeyCode,
+	pub b: VirtualKeyCode,
+	pub select: VirtualKeyCode,
+	pub start: VirtualKeyCode,
+	pub up: VirtualKeyCode,
+	pub down: VirtualKeyCode,
+	pub left: VirtualKeyCode,
+	pub right: VirtualKeyCode,
 
-	pub pause: KeyCode,
-	pub exit: KeyCode,
+	pub pause: VirtualKeyCode,
+	pub exit: VirtualKeyCode,
+
+	pub debug_menu: Option<VirtualKeyCode>,
 }

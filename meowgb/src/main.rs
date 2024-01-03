@@ -4,18 +4,20 @@ mod window;
 use std::{
 	borrow::Cow,
 	path::PathBuf,
-	sync::mpsc::{channel, Receiver, Sender},
+	sync::{
+		mpsc::{channel, Receiver, Sender},
+		Arc, RwLock,
+	},
 };
 
 use clap::Parser;
+use config::MeowGBConfig;
 use meowgb_core::gameboy::{
 	bootrom::{verify_parse_bootrom, BootromParseError},
+	serial::SerialWriter,
 	Gameboy,
 };
-use config::MeowGBConfig;
-use window::EmulatorWindowEvent;
-
-use crate::window::GameboyEvent;
+use window::events::{EmulatorWindowEvent, GameboyEvent};
 
 #[derive(Debug, Parser)]
 /// DMG Emulator
@@ -56,14 +58,23 @@ fn real_main() -> Result<(), MeowGBError> {
 		path.file_name().and_then(|name| name.to_str().map(str::to_string).map(Cow::Owned))
 	});
 
+	let bootrom = match args.bootrom.as_deref() {
+		Some(path) => Some(verify_parse_bootrom(path).map_err(MeowGBError::Bootrom)?),
+		None => None,
+	};
+
+	let gameboy = Arc::new(RwLock::new(Gameboy::new(bootrom, std::io::stdout())));
+	let gameboy_2 = gameboy.clone();
+
 	let jh = std::thread::Builder::new()
 		.name(String::from("mewmulator"))
-		.spawn(move || run_gameboy(args, gb_side_rx, gb_side_tx).unwrap())
+		.spawn(move || run_gameboy(args, gameboy_2, gb_side_rx, gb_side_tx).unwrap())
 		.unwrap();
 
 	window::run_window(
 		&rom_name.unwrap_or(Cow::Borrowed("NO GAME")),
 		config,
+		gameboy,
 		window_side_rx,
 		window_side_tx,
 	);
@@ -82,15 +93,11 @@ fn main() {
 
 pub fn run_gameboy(
 	args: CliArgs,
+	gameboy_arc: Arc<RwLock<Gameboy<impl SerialWriter>>>,
 	rx: Receiver<EmulatorWindowEvent>,
 	tx: Sender<GameboyEvent>,
 ) -> Result<(), MeowGBError> {
-	let bootrom = match args.bootrom.as_deref() {
-		Some(path) => Some(verify_parse_bootrom(path).map_err(MeowGBError::Bootrom)?),
-		None => None,
-	};
-
-	let mut gameboy = Gameboy::new(bootrom, std::io::stdout());
+	let mut gameboy = gameboy_arc.write().unwrap();
 
 	if args.debug {
 		gameboy.single_step = true;
@@ -107,38 +114,32 @@ pub fn run_gameboy(
 		gameboy.load_cartridge(rom)
 	}
 
+	drop(gameboy);
+
 	let mut goal = time::OffsetDateTime::now_utc() + time::Duration::milliseconds(1000 / 60);
 	let mut frame_counter = 0;
 
 	'outer: loop {
+		let mut gameboy = gameboy_arc.write().unwrap();
+
 		while let Ok(event) = rx.try_recv() {
 			match event {
-				window::EmulatorWindowEvent::AToggle => gameboy.joypad.set_a(!gameboy.joypad.a),
-				window::EmulatorWindowEvent::BToggle => gameboy.joypad.set_b(!gameboy.joypad.b),
-				window::EmulatorWindowEvent::SelectToggle => {
-					gameboy.joypad.set_select(!gameboy.joypad.select)
-				}
-				window::EmulatorWindowEvent::StartToggle => {
-					gameboy.joypad.set_start(!gameboy.joypad.start)
-				}
-				window::EmulatorWindowEvent::UpToggle => gameboy.joypad.set_up(!gameboy.joypad.up),
-				window::EmulatorWindowEvent::DownToggle => {
-					gameboy.joypad.set_down(!gameboy.joypad.down)
-				}
-				window::EmulatorWindowEvent::LeftToggle => {
-					gameboy.joypad.set_left(!gameboy.joypad.left)
-				}
-				window::EmulatorWindowEvent::RightToggle => {
-					gameboy.joypad.set_right(!gameboy.joypad.right)
-				}
-				window::EmulatorWindowEvent::PauseToggle => {
-					gameboy.single_step = !gameboy.single_step
-				}
-				window::EmulatorWindowEvent::Exit => break 'outer,
+				EmulatorWindowEvent::AToggle => gameboy.joypad.invert_a(),
+				EmulatorWindowEvent::BToggle => gameboy.joypad.invert_b(),
+				EmulatorWindowEvent::SelectToggle => gameboy.joypad.invert_select(),
+				EmulatorWindowEvent::StartToggle => gameboy.joypad.invert_start(),
+				EmulatorWindowEvent::UpToggle => gameboy.joypad.invert_up(),
+				EmulatorWindowEvent::DownToggle => gameboy.joypad.invert_down(),
+				EmulatorWindowEvent::LeftToggle => gameboy.joypad.invert_left(),
+				EmulatorWindowEvent::RightToggle => gameboy.joypad.invert_right(),
+				EmulatorWindowEvent::PauseToggle => gameboy.single_step = !gameboy.single_step,
+				EmulatorWindowEvent::Exit => break 'outer,
 			}
 		}
 
 		let (redraw_needed, time_spent_debugging) = gameboy.tick_4();
+
+		drop(gameboy);
 
 		if let Some(diff) = time_spent_debugging {
 			goal = goal + diff;
@@ -147,7 +148,7 @@ pub fn run_gameboy(
 		if redraw_needed {
 			let now = time::OffsetDateTime::now_utc();
 			frame_counter += 1;
-			tx.send(GameboyEvent::Framebuffer(gameboy.ppu.write_fb())).unwrap();
+			tx.send(GameboyEvent::Framebuffer(gameboy_arc.read().unwrap().ppu.write_fb())).unwrap();
 			let delta = goal - now;
 			let delta_ms = delta.whole_milliseconds();
 			if delta_ms > 0 {

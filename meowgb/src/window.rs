@@ -1,14 +1,24 @@
-use std::sync::mpsc::{Receiver, Sender};
+pub mod events;
+mod overlay;
 
+use std::sync::{
+	mpsc::{Receiver, Sender},
+	Arc, RwLock,
+};
+
+use meowgb_core::gameboy::{serial::SerialWriter, Gameboy};
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
-	event::{Event, WindowEvent},
+	event::Event,
 	event_loop::{ControlFlow, EventLoop},
-	keyboard::KeyCode,
 	window::WindowBuilder,
 };
 use winit_input_helper::WinitInputHelper;
 
+use self::{
+	events::{EmulatorWindowEvent, GameboyEvent, Keymap},
+	overlay::Framework,
+};
 use crate::config::MeowGBConfig;
 
 macro_rules! define_keypress {
@@ -29,86 +39,39 @@ macro_rules! define_keypress {
 	};
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum EmulatorWindowEvent {
-	AToggle,
-	BToggle,
-	SelectToggle,
-	StartToggle,
-	UpToggle,
-	DownToggle,
-	LeftToggle,
-	RightToggle,
-	PauseToggle,
-	Exit,
-}
-
-#[derive(Debug)]
-pub enum GameboyEvent {
-	Framebuffer(Vec<u8>),
-}
-
-#[derive(Debug, Default)]
-struct Keymap {
-	pub down: bool,
-	pub up: bool,
-	pub left: bool,
-	pub right: bool,
-	pub start: bool,
-	pub select: bool,
-	pub b: bool,
-	pub a: bool,
-	pub pause: bool,
-}
-
-impl Keymap {
-	pub fn idx(&mut self, config: &MeowGBConfig, kc: KeyCode) -> &mut bool {
-		if kc == config.bindings.a {
-			&mut self.a
-		} else if kc == config.bindings.b {
-			&mut self.b
-		} else if kc == config.bindings.start {
-			&mut self.start
-		} else if kc == config.bindings.select {
-			&mut self.select
-		} else if kc == config.bindings.up {
-			&mut self.up
-		} else if kc == config.bindings.down {
-			&mut self.down
-		} else if kc == config.bindings.left {
-			&mut self.left
-		} else if kc == config.bindings.right {
-			&mut self.right
-		} else if kc == config.bindings.pause {
-			&mut self.pause
-		} else {
-			unreachable!();
-		}
-	}
-}
-
 pub fn run_window(
 	rom_name: &str,
 	config: MeowGBConfig,
+	gameboy: Arc<RwLock<Gameboy<impl SerialWriter + 'static>>>,
 	rx: Receiver<GameboyEvent>,
 	tx: Sender<EmulatorWindowEvent>,
 ) {
-	let event_loop = EventLoop::new().unwrap();
+	let event_loop = EventLoop::new();
 	let mut input = WinitInputHelper::new();
 
 	let window = {
 		WindowBuilder::new().with_title(format!("Meow - {}", rom_name)).build(&event_loop).unwrap()
 	};
 
-	let mut pixels = {
+	let (mut pixels, mut framework) = {
 		let window_size = window.inner_size();
+		let scale_factor = window.scale_factor() as f32;
 		let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-		Pixels::new(
+		let pixels = Pixels::new(
 			meowgb_core::gameboy::ppu::FB_WIDTH,
 			meowgb_core::gameboy::ppu::FB_HEIGHT,
 			surface_texture,
 		)
-		.unwrap()
+		.unwrap();
+		let framework = Framework::new(
+			&event_loop,
+			window_size.width,
+			window_size.height,
+			scale_factor,
+			&pixels,
+			&gameboy.read().unwrap(),
+		);
+		(pixels, framework)
 	};
 
 	let mut redraw_happened = true;
@@ -116,90 +79,97 @@ pub fn run_window(
 
 	let mut keymap = Keymap::default();
 
-	let mut request_redraw = false;
-	let mut close_requested = false;
-
-	event_loop
-		.run(move |event, target| {
-			match &event {
-				Event::WindowEvent { event, .. } => match event {
-					WindowEvent::CloseRequested => close_requested = true,
-					WindowEvent::RedrawRequested => {
-						let frame = pixels.frame_mut();
-
-						match fb.as_ref() {
-							Some(fb) => {
-								redraw_happened = true;
-								frame.copy_from_slice(fb.as_slice());
-							}
-							None => {
-								let x = vec![0xff; frame.len()];
-								frame.copy_from_slice(x.as_slice())
-							}
-						}
-						if let Err(why) = pixels.render() {
-							log::error!("Pixels Error: {}", why);
-							close_requested = true;
-							tx.send(EmulatorWindowEvent::Exit).unwrap();
-							return;
-						}
-					}
-					_ => {}
-				},
-				Event::AboutToWait => {
-					if request_redraw && !close_requested {
-						window.request_redraw();
-					}
-
-					target.set_control_flow(ControlFlow::Poll);
-
-					if close_requested {
-						target.exit();
-					}
-				}
-				_ => {}
+	event_loop.run(move |event, _, control_flow| {
+		if input.update(&event) {
+			if input.key_pressed(config.bindings.exit) || input.close_requested() {
+				*control_flow = ControlFlow::Exit;
+				tx.send(EmulatorWindowEvent::Exit).unwrap();
+				return;
 			}
 
-			if input.update(&event) {
-				if input.key_pressed(config.bindings.exit)
-					|| (input.close_requested() || input.destroyed())
-				{
+			if input.key_pressed(config.bindings.pause) {
+				tx.send(EmulatorWindowEvent::PauseToggle).unwrap();
+			}
+
+			if let Some(debug_menu) = config.bindings.debug_menu {
+				if input.key_pressed(debug_menu) {
+					framework.gui.window_open = !framework.gui.window_open;
+				}
+			}
+			if input.key_pressed(config.bindings.pause) {}
+
+			if let Some(scale_factor) = input.scale_factor() {
+				framework.scale_factor(scale_factor);
+			}
+
+			define_keypress!(input, config, keymap, tx, a, AToggle);
+			define_keypress!(input, config, keymap, tx, b, BToggle);
+			define_keypress!(input, config, keymap, tx, start, StartToggle);
+			define_keypress!(input, config, keymap, tx, select, SelectToggle);
+			define_keypress!(input, config, keymap, tx, up, UpToggle);
+			define_keypress!(input, config, keymap, tx, down, DownToggle);
+			define_keypress!(input, config, keymap, tx, left, LeftToggle);
+			define_keypress!(input, config, keymap, tx, right, RightToggle);
+		}
+
+		match event {
+			Event::WindowEvent { event, .. } => {
+				framework.handle_event(&event);
+			}
+			Event::RedrawRequested(_) => {
+				let frame = pixels.frame_mut();
+
+				match fb.as_ref() {
+					Some(fb) => {
+						redraw_happened = true;
+						frame.copy_from_slice(fb.as_slice());
+					}
+					None => {
+						let x = vec![0xff; frame.len()];
+						frame.copy_from_slice(x.as_slice())
+					}
+				}
+
+				framework.prepare(&window, &gameboy.read().unwrap());
+
+				let render_result = pixels.render_with(|encoder, render_target, context| {
+					// Render the world texture
+					context.scaling_renderer.render(encoder, render_target);
+
+					// Render egui
+					framework.render(encoder, render_target, context);
+
+					Ok(())
+				});
+
+				if let Err(why) = render_result {
+					eprintln!("Pixels Error: {}", why);
+					*control_flow = ControlFlow::Exit;
 					tx.send(EmulatorWindowEvent::Exit).unwrap();
 					return;
 				}
-
-				if input.key_pressed(config.bindings.pause) {
-					tx.send(EmulatorWindowEvent::PauseToggle).unwrap();
-				}
-
-				define_keypress!(input, config, keymap, tx, a, AToggle);
-				define_keypress!(input, config, keymap, tx, b, BToggle);
-				define_keypress!(input, config, keymap, tx, start, StartToggle);
-				define_keypress!(input, config, keymap, tx, select, SelectToggle);
-				define_keypress!(input, config, keymap, tx, up, UpToggle);
-				define_keypress!(input, config, keymap, tx, down, DownToggle);
-				define_keypress!(input, config, keymap, tx, left, LeftToggle);
-				define_keypress!(input, config, keymap, tx, right, RightToggle);
 			}
+			_ => {}
+		}
 
-			if let Some(size) = input.window_resized() {
-				pixels.resize_surface(size.width, size.height).unwrap();
-				window.request_redraw();
-				redraw_happened = false;
-			}
+		if let Some(size) = input.window_resized() {
+			pixels.resize_surface(size.width, size.height).unwrap();
+			framework.resize(size.width, size.height);
+			window.request_redraw();
+			redraw_happened = false;
+		}
 
-			while let Ok(event) = rx.try_recv() {
-				match event {
-					GameboyEvent::Framebuffer(buf) => {
-						fb = Some(buf);
+		while let Ok(event) = rx.try_recv() {
+			match event {
+				GameboyEvent::Framebuffer(buf) => {
+					fb = Some(buf);
 
-						if redraw_happened {
-							request_redraw = true;
-							redraw_happened = false;
-						}
+					if redraw_happened {
+						window.request_redraw();
+						redraw_happened = false;
 					}
 				}
 			}
-		})
-		.expect("event loop error");
+		}
+	});
 }
