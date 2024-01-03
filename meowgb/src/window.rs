@@ -9,7 +9,7 @@ use winit::{
 };
 use winit_input_helper::WinitInputHelper;
 
-use crate::settings::DeemgeeConfig;
+use crate::config::MeowGBConfig;
 
 macro_rules! define_keypress {
 	($input:ident, $config:ident, $keymap:ident, $tx:ident, $key:ident, $event:ident) => {
@@ -40,9 +40,7 @@ pub enum EmulatorWindowEvent {
 	LeftToggle,
 	RightToggle,
 	PauseToggle,
-	LogToggle,
 	Exit,
-	DumpMemory,
 }
 
 #[derive(Debug)]
@@ -64,7 +62,7 @@ struct Keymap {
 }
 
 impl Keymap {
-	pub fn idx(&mut self, config: &DeemgeeConfig, kc: KeyCode) -> &mut bool {
+	pub fn idx(&mut self, config: &MeowGBConfig, kc: KeyCode) -> &mut bool {
 		if kc == config.bindings.a {
 			&mut self.a
 		} else if kc == config.bindings.b {
@@ -91,7 +89,7 @@ impl Keymap {
 
 pub fn run_window(
 	rom_name: &str,
-	config: DeemgeeConfig,
+	config: MeowGBConfig,
 	rx: Receiver<GameboyEvent>,
 	tx: Sender<EmulatorWindowEvent>,
 ) {
@@ -172,14 +170,6 @@ pub fn run_window(
 
 				if input.key_pressed(config.bindings.pause) {
 					tx.send(EmulatorWindowEvent::PauseToggle).unwrap();
-				}
-
-				if input.key_pressed(config.bindings.log_ops) {
-					tx.send(EmulatorWindowEvent::LogToggle).unwrap();
-				}
-
-				if input.key_pressed(config.bindings.dump_memory) {
-					tx.send(EmulatorWindowEvent::DumpMemory).unwrap();
 				}
 
 				define_keypress!(input, config, keymap, tx, a, AToggle);

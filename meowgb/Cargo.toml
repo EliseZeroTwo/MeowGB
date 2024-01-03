@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 meowgb-core = { path = "../meowgb-core" }
 clap = { version = "4.4.12", features = ["derive"] }
-config = "0.13.4"
 env_logger = "0.10.1"
 pixels = "0.13.0"
 serde = { version = "1.0.130", features = ["derive"] }
@@ -17,3 +16,5 @@ winit = { version = "0.29.7", default-features = false, features = ["serde", "rw
 winit_input_helper = "0.15.1"
 log = "0.4.20"
 time = "0.3.31"
+home = "0.5.9"
+toml = "0.8.8"

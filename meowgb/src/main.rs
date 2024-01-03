@@ -1,4 +1,4 @@
-mod settings;
+mod config;
 mod window;
 
 use std::{
@@ -12,7 +12,7 @@ use meowgb_core::gameboy::{
 	bootrom::{verify_parse_bootrom, BootromParseError},
 	Gameboy,
 };
-use settings::DeemgeeConfig;
+use config::MeowGBConfig;
 use window::EmulatorWindowEvent;
 
 use crate::window::GameboyEvent;
@@ -32,20 +32,22 @@ pub struct CliArgs {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum DmgError {
+pub enum MeowGBError {
 	#[error(transparent)]
 	Bootrom(BootromParseError),
 	#[error("Game Not Found")]
 	GameNotFound,
 	#[error("IO Error: {0}")]
 	IO(#[from] std::io::Error),
+	#[error(transparent)]
+	Config(#[from] config::ConfigError),
 }
 
-fn main() {
+fn real_main() -> Result<(), MeowGBError> {
 	env_logger::init();
 
 	let args: CliArgs = CliArgs::parse();
-	let config = DeemgeeConfig::from_file();
+	let config = MeowGBConfig::from_file()?;
 
 	let (window_side_tx, gb_side_rx) = channel::<EmulatorWindowEvent>();
 	let (gb_side_tx, window_side_rx) = channel::<GameboyEvent>();
@@ -56,7 +58,7 @@ fn main() {
 
 	let jh = std::thread::Builder::new()
 		.name(String::from("mewmulator"))
-		.spawn(move || run_gameboy(config, args, gb_side_rx, gb_side_tx).unwrap())
+		.spawn(move || run_gameboy(args, gb_side_rx, gb_side_tx).unwrap())
 		.unwrap();
 
 	window::run_window(
@@ -67,16 +69,24 @@ fn main() {
 	);
 
 	jh.join().unwrap();
+
+	Ok(())
+}
+
+fn main() {
+	if let Err(why) = real_main() {
+		eprintln!("{}", why);
+		std::process::exit(1);
+	}
 }
 
 pub fn run_gameboy(
-	_config: DeemgeeConfig,
 	args: CliArgs,
 	rx: Receiver<EmulatorWindowEvent>,
 	tx: Sender<GameboyEvent>,
-) -> Result<(), DmgError> {
+) -> Result<(), MeowGBError> {
 	let bootrom = match args.bootrom.as_deref() {
-		Some(path) => Some(verify_parse_bootrom(path).map_err(DmgError::Bootrom)?),
+		Some(path) => Some(verify_parse_bootrom(path).map_err(MeowGBError::Bootrom)?),
 		None => None,
 	};
 
@@ -89,7 +99,7 @@ pub fn run_gameboy(
 
 	if let Some(rom) = args.rom {
 		if !rom.is_file() {
-			return Err(DmgError::GameNotFound);
+			return Err(MeowGBError::GameNotFound);
 		}
 
 		let rom = std::fs::read(rom.as_path())?;
@@ -124,16 +134,7 @@ pub fn run_gameboy(
 				window::EmulatorWindowEvent::PauseToggle => {
 					gameboy.single_step = !gameboy.single_step
 				}
-				window::EmulatorWindowEvent::LogToggle => {
-					gameboy.log_instructions = !gameboy.log_instructions
-				}
 				window::EmulatorWindowEvent::Exit => break 'outer,
-				window::EmulatorWindowEvent::DumpMemory => {
-					let timestamp = time::OffsetDateTime::now_utc().unix_timestamp();
-					let contents = gameboy.dump_memory();
-					std::fs::write(format!("./memdump-{}.bin", timestamp), contents)
-						.expect("Failed to write memory dump");
-				}
 			}
 		}
 
