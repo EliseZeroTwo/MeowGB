@@ -1,1 +1,116 @@
-./.github/workflows/action.yml
+on:
+  - push
+
+jobs:
+  main_test:
+    name: Test changes to main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install toolchain
+        run: curl https://sh.rustup.rs -sSf | sh -s -- --profile minimal --default-toolchain stable -y && echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Run cargo tests (meowgb-core)
+        run: cargo test -p meowgb-core
+        
+      - name: Run test ROM (blargg cpu_instrs)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/blargg/roms/cpu_instrs.gb test -m 100000000 -s meowgb-tests/expected_output/cpu_instrs.bin
+        
+      - name: Run test ROM (blargg instr_timing)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/blargg/roms/instr_timing.gb test -m 100000000 -s meowgb-tests/expected_output/instr_timing.bin
+        
+      - name: Run test ROM (blargg mem_timing)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/blargg/roms/mem_timing.gb test -m 100000000 -s meowgb-tests/expected_output/mem_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite basic)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/basic.gb test -m 100000000 -s meowgb-tests/expected_output/basic.bin
+
+      - name: Run test ROM (mooneye-test-suite boot_hwio-dmgABCmgb)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/boot_hwio-dmgABCmgb.gb test -m 100000000 -s meowgb-tests/expected_output/boot_hwio-dmgABCmgb.bin
+
+      - name: Run test ROM (mooneye-test-suite boot_regs-dmgABC)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/boot_regs-dmgABC.gb test -m 100000000 -s meowgb-tests/expected_output/boot_regs-dmgABC.bin
+
+      - name: Run test ROM (mooneye-test-suite daa)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/daa.gb test -m 100000000 -s meowgb-tests/expected_output/daa.bin
+
+      - name: Run test ROM (mooneye-test-suite ei_sequence)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/ei_sequence.gb test -m 100000000 -s meowgb-tests/expected_output/ei_sequence.bin
+
+      - name: Run test ROM (mooneye-test-suite ei_timing)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/ei_timing.gb test -m 100000000 -s meowgb-tests/expected_output/ei_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite halt_ime0_ei)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/halt_ime0_ei.gb test -m 100000000 -s meowgb-tests/expected_output/halt_ime0_ei.bin
+
+      - name: Run test ROM (mooneye-test-suite intr_1_2_timing-GS)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/intr_1_2_timing-GS.gb test -m 100000000 -s meowgb-tests/expected_output/intr_1_2_timing-GS.bin
+
+      - name: Run test ROM (mooneye-test-suite intr_2_0_timing)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/intr_2_0_timing.gb test -m 100000000 -s meowgb-tests/expected_output/intr_2_0_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite mem_oam)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/mem_oam.gb test -m 100000000 -s meowgb-tests/expected_output/mem_oam.bin
+
+      - name: Run test ROM (mooneye-test-suite oam_dma_restart)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/oam_dma_restart.gb test -m 100000000 -s meowgb-tests/expected_output/oam_dma_restart.bin
+
+      - name: Run test ROM (mooneye-test-suite oam_dma_start)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/oam_dma_start.gb test -m 100000000 -s meowgb-tests/expected_output/oam_dma_start.bin
+
+      - name: Run test ROM (mooneye-test-suite oam_dma_timing)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/oam_dma_timing.gb test -m 100000000 -s meowgb-tests/expected_output/oam_dma_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite rapid_di_ei)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/rapid_di_ei.gb test -m 100000000 -s meowgb-tests/expected_output/rapid_di_ei.bin
+
+      - name: Run test ROM (mooneye-test-suite reg_f)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/reg_f.gb test -m 100000000 -s meowgb-tests/expected_output/reg_f.bin
+
+      - name: Run test ROM (mooneye-test-suite reg_read)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/reg_read.gb test -m 100000000 -s meowgb-tests/expected_output/reg_read.bin
+
+      - name: Run test ROM (mooneye-test-suite stat_irq_blocking)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/stat_irq_blocking.gb test -m 100000000 -s meowgb-tests/expected_output/stat_irq_blocking.bin
+
+      - name: Run test ROM (mooneye-test-suite stat_lyc_onoff)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/stat_lyc_onoff.gb test -m 100000000 -s meowgb-tests/expected_output/stat_lyc_onoff.bin
+
+      - name: Run test ROM (mooneye-test-suite tim00_div_trigger)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/tim00_div_trigger.gb test -m 100000000 -s meowgb-tests/expected_output/tim00_div_trigger.bin
+
+      - name: Run test ROM (mooneye-test-suite tim01)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/tim01.gb test -m 100000000 -s meowgb-tests/expected_output/tim01.bin
+
+      - name: Run test ROM (mooneye-test-suite tim11_div_trigger)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/tim11_div_trigger.gb test -m 100000000 -s meowgb-tests/expected_output/tim11_div_trigger.bin
+
+      - name: Run test ROM (mooneye-test-suite unused_hwio-GS)
+        if: always()
+        run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/unused_hwio-GS.gb test -m 100000000 -s meowgb-tests/expected_output/unused_hwio-GS.bin

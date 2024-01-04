@@ -53,3 +53,5 @@ do
         run: cargo run -p meowgb-tests --release -- test-roms/mooneye-test-suite/roms/$f.gb test -m 100000000 -s meowgb-tests/expected_output/$f.bin
 EOF
 done
+
+cp .github/workflows/action.yml .forgejo/workflows/action.yml
