@@ -27,8 +27,8 @@ impl Interrupts {
 	pub fn new() -> Self {
 		Self {
 			ime: false,
-			interrupt_enable: 0,
-			interrupt_flag: 0b11100000,
+			interrupt_enable: 0b0000_0000,
+			interrupt_flag: 0b1110_0001,
 			ei_queued: false,
 			cycle_passed: false,
 		}
@@ -50,5 +50,9 @@ impl Interrupts {
 		if !val {
 			self.ime = false;
 		}
+	}
+
+	pub fn cpu_set_interrupt_enable(&mut self, value: u8) {
+		self.interrupt_enable = value;
 	}
 }

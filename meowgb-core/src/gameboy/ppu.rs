@@ -3,6 +3,10 @@ use super::interrupts::Interrupts;
 pub const FB_HEIGHT: u32 = 144;
 pub const FB_WIDTH: u32 = 160;
 pub const PIXEL_SIZE: usize = 4; // RGBA
+/// Helper for debugging PPU timings that allows read/writes to PPU memory no
+/// matter what mode it is in. This also allows the PPU to bypass a DMA
+/// currently occuring which is blocking access to the memory bus.
+const OVERRIDE_PPU_MEMORY_ACCESS: bool = false;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Palette {
@@ -36,7 +40,7 @@ enum LineDrawingState {
 
 impl Palette {
 	pub fn new_bgp() -> Self {
-		Self { id0: Color::White, id1: Color::LGray, id2: Color::DGray, id3: Color::Black }
+		Self { id0: Color::White, id1: Color::Black, id2: Color::Black, id3: Color::Black }
 	}
 
 	pub fn new_obp() -> Self {
@@ -325,7 +329,7 @@ impl Ppu {
 	pub fn new(bootrom_ran: bool) -> Self {
 		Self {
 			registers: PpuRegisters {
-				lcdc: (!bootrom_ran).then_some(0b1000_0000).unwrap_or_default(),
+				lcdc: (!bootrom_ran).then_some(0b1001_0001).unwrap_or_default(),
 				stat_flags: StatFlags::default(),
 				mode: PPUMode::HBlank,
 				scy: 0,
@@ -445,7 +449,7 @@ impl Ppu {
 	}
 
 	fn internal_read_oam(&mut self, offset: usize) -> u8 {
-		match self.dma_occuring {
+		match self.dma_occuring && !OVERRIDE_PPU_MEMORY_ACCESS {
 			true => 0xFF,
 			false => self.oam[offset as usize],
 		}
@@ -458,7 +462,7 @@ impl Ppu {
 
 	pub fn cpu_read_oam(&self, address: u16) -> u8 {
 		let decoded_address = address - 0xFE00;
-		if self.enabled() && !self.first_frame {
+		if self.enabled() && !self.first_frame && !OVERRIDE_PPU_MEMORY_ACCESS {
 			match self.mode() {
 				PPUMode::HBlank | PPUMode::VBlank => self.oam[decoded_address as usize],
 				PPUMode::SearchingOAM | PPUMode::TransferringData => 0xFF,
@@ -470,7 +474,7 @@ impl Ppu {
 
 	pub fn cpu_write_oam(&mut self, address: u16, value: u8) {
 		let decoded_address = address - 0xFE00;
-		if self.enabled() && !self.first_frame {
+		if self.enabled() && !self.first_frame && !OVERRIDE_PPU_MEMORY_ACCESS {
 			match self.mode() {
 				PPUMode::HBlank | PPUMode::VBlank => self.oam[decoded_address as usize] = value,
 				PPUMode::SearchingOAM | PPUMode::TransferringData => {}
@@ -482,7 +486,7 @@ impl Ppu {
 
 	pub fn cpu_read_vram(&self, address: u16) -> u8 {
 		let decoded_address = address - 0x8000;
-		if self.enabled() && !self.first_frame {
+		if self.enabled() && !self.first_frame && !OVERRIDE_PPU_MEMORY_ACCESS {
 			match self.mode() {
 				PPUMode::HBlank | PPUMode::VBlank | PPUMode::SearchingOAM => {
 					self.vram[decoded_address as usize]
@@ -496,7 +500,7 @@ impl Ppu {
 
 	pub fn cpu_write_vram(&mut self, address: u16, value: u8) {
 		let decoded_address = address - 0x8000;
-		if self.enabled() && !self.first_frame {
+		if self.enabled() && !self.first_frame && !OVERRIDE_PPU_MEMORY_ACCESS {
 			match self.mode() {
 				PPUMode::HBlank | PPUMode::VBlank | PPUMode::SearchingOAM => {
 					self.vram[decoded_address as usize] = value
@@ -629,9 +633,7 @@ impl Ppu {
 					false
 				}
 				PPUMode::HBlank => {
-					if self.first_line && self.current_dot == 16 && self.dot_target == 0 {
-						// Special case for resets
-						// self.handle_stat_irq(interrupts, false);
+					if self.first_line && self.current_dot == 64 && self.dot_target == 0 {
 						self.set_mode(interrupts, PPUMode::TransferringData);
 					} else if self.dot_target != 0 && self.current_dot == self.dot_target {
 						self.set_scanline(interrupts, self.registers.ly + 1);
@@ -639,7 +641,7 @@ impl Ppu {
 						assert_eq!(
 							self.total_dots,
 							match self.first_frame && self.first_line {
-								true => 456 - (80 - 16),
+								true => 456 - (80 - 64),
 								false => 456,
 							}
 						);

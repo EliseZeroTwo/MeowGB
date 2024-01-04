@@ -1,5 +1,6 @@
 pub mod bootrom;
 pub mod cpu;
+pub mod dma;
 pub mod interrupts;
 pub mod joypad;
 pub mod mapper;
@@ -22,24 +23,8 @@ use self::{
 	cpu::Registers,
 	mapper::{mbc1::MBC1, NoMBC},
 	serial::{Serial, SerialWriter},
-	sound::Sound,
+	sound::Sound, dma::DmaState,
 };
-
-pub struct DmaState {
-	pub base: u8,
-	pub remaining_cycles: u8,
-}
-
-impl DmaState {
-	pub fn new() -> Self {
-		Self { base: 0, remaining_cycles: 0 }
-	}
-
-	pub fn init_request(&mut self, base: u8) {
-		self.base = base;
-		self.remaining_cycles = 0xA0;
-	}
-}
 
 pub struct RingBuffer<T: std::fmt::Debug + Copy + Default, const SIZE: usize> {
 	buffer: [T; SIZE],
@@ -155,7 +140,7 @@ impl<S: SerialWriter> Gameboy<S> {
 				true => Registers::default(),
 				false => Registers::post_rom(),
 			},
-			sound: Sound::default(),
+			sound: Sound::new(),
 			single_step: false,
 			breakpoints: [false; u16::MAX as usize + 1],
 			mem_read_breakpoints: [false; u16::MAX as usize + 1],
@@ -402,7 +387,7 @@ impl<S: SerialWriter> Gameboy<S> {
 
 			cpu::tick_cpu(self);
 			let redraw_requested = self.ppu.tick(&mut self.interrupts);
-			self.tick_dma();
+			self.dma.tick_dma(&mut self.ppu, &self.memory, self.cartridge.as_deref());
 			if self.serial.tick() {
 				self.interrupts.write_if_serial(true);
 			}
@@ -416,39 +401,11 @@ impl<S: SerialWriter> Gameboy<S> {
 		}
 	}
 
-	fn tick_dma(&mut self) {
-		self.ppu.dma_occuring = self.dma.remaining_cycles > 0;
-		if self.dma.remaining_cycles > 0 {
-			let offset = 0xA0 - self.dma.remaining_cycles;
-
-			let value = if self.dma.base <= 0x7F {
-				match self.cartridge.as_ref() {
-					Some(cart) => cart.read_rom_u8((self.dma.base as u16) << 8 | offset as u16),
-					None => 0xFF,
-				}
-			} else if self.dma.base <= 0x9F {
-				let address = (((self.dma.base as usize) << 8) | offset as usize) - 0x8000;
-				self.ppu.vram[address]
-			} else if self.dma.base <= 0xDF {
-				let address = ((self.dma.base as usize) << 8 | offset as usize) - 0xC000;
-				self.memory.wram[address]
-			} else if self.dma.base <= 0xFD {
-				let address = ((self.dma.base as usize) << 8 | offset as usize) - 0xE000;
-				self.memory.wram[address]
-			} else {
-				0xFF
-			};
-
-			self.ppu.dma_write_oam(offset, value);
-			self.dma.remaining_cycles -= 1;
-		}
-	}
-
 	fn cpu_read_io(&self, address: u16) -> u8 {
 		match address {
 			0xFF00 => self.joypad.cpu_read(),
 			0xFF01 => self.serial.sb,
-			0xFF02 => self.serial.sc,
+			0xFF02 => self.serial.get_sc(),
 			0xFF03 => 0xFF, // Unused
 			0xFF04 => self.timer.div,
 			0xFF05 => self.timer.tima,
@@ -495,7 +452,7 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFF4B => self.ppu.registers.wx,
 			0xFF4C..=0xFF4E => 0xFF, // Unused
 			0xFF4F => 0xFF,          // CGB VRAM Bank Select
-			0xFF50 => self.memory.bootrom_disabled as u8,
+			0xFF50 => self.memory.get_bootrom_disabled(),
 			0xFF51..=0xFF55 => 0xFF, // CGB VRAM DMA
 			0xFF56..=0xFF67 => 0xFF, // Unused
 			0xFF68..=0xFF69 => 0xFF, // BJ/OBJ Palettes
@@ -510,7 +467,7 @@ impl<S: SerialWriter> Gameboy<S> {
 		match address {
 			0xFF00 => self.joypad.cpu_write(value),
 			0xFF01 => self.serial.sb = value,
-			0xFF02 => self.serial.sc = value,
+			0xFF02 => self.serial.set_sc(value),
 			0xFF03 => {} // Unused
 			0xFF04 => self.timer.div = 0,
 			0xFF05 => self.timer.tima = value,
@@ -518,7 +475,7 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFF07 => self.timer.write_tac(value),
 			0xFF08..=0xFF0E => {} // Unused
 			0xFF0F => self.interrupts.interrupt_flag = value | !0b1_1111,
-			0xFF10 => self.sound.nr10 = value,
+			0xFF10 => {} //self.sound.nr10 = value, - Unwritable on DMG
 			0xFF11 => self.sound.nr11 = value,
 			0xFF12 => self.sound.nr12 = value,
 			0xFF13 => self.sound.nr13 = value,
@@ -528,19 +485,19 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFF17 => self.sound.nr22 = value,
 			0xFF18 => self.sound.nr23 = value,
 			0xFF19 => self.sound.nr24 = value,
-			0xFF1A => self.sound.nr30 = value,
+			0xFF1A => {}, //self.sound.nr30 = value, - Unwritable on DMG
 			0xFF1B => self.sound.nr31 = value,
-			0xFF1C => self.sound.nr32 = value,
+			0xFF1C => {}, //self.sound.nr32 = value, - Unwritable on DMG
 			0xFF1D => self.sound.nr33 = value,
 			0xFF1E => self.sound.nr34 = value,
 			0xFF1F => {}
-			0xFF20 => self.sound.nr41 = value,
+			0xFF20 => {}, //self.sound.nr41 = value, - Unwritable on DMG
 			0xFF21 => self.sound.nr42 = value,
 			0xFF22 => self.sound.nr43 = value,
-			0xFF23 => self.sound.nr44 = value,
+			0xFF23 => {}, //self.sound.nr44 = value, - Unwritable on DMG
 			0xFF24 => self.sound.nr50 = value,
 			0xFF25 => self.sound.nr51 = value,
-			0xFF26 => self.sound.nr52 = value,
+			0xFF26 => {}, //self.sound.nr52 = value, - Unwritable on DMG
 			0xFF27..=0xFF2F => {}
 			0xFF30..=0xFF3F => self.sound.wave_pattern_ram[address as usize - 0xFF30] = value,
 			0xFF40 => {
@@ -558,11 +515,7 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFF43 => self.ppu.registers.scx = value,
 			0xFF44 => {} // LY is read only
 			0xFF45 => self.ppu.set_lyc(&mut self.interrupts, value),
-			0xFF46 => {
-				if self.dma.remaining_cycles == 0 {
-					self.dma.init_request(value);
-				}
-			}
+			0xFF46 => self.dma.init_request(value),
 			0xFF47 => self.ppu.bgp.write_bgp(value),
 			0xFF48 => self.ppu.obp[0].write_obp(value),
 			0xFF49 => self.ppu.obp[1].write_obp(value),
@@ -642,12 +595,12 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFEA0..=0xFEFF => {}
 			0xFF00..=0xFF7F => self.cpu_write_io(address, value),
 			0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80] = value,
-			0xFFFF => self.interrupts.interrupt_enable = value & 0b1_1111,
+			0xFFFF => self.interrupts.cpu_set_interrupt_enable(value),
 		}
 	}
 
 	fn internal_cpu_read_u8(&self, address: u16) -> u8 {
-		if self.dma.remaining_cycles == 0 {
+		if !self.ppu.dma_occuring {
 			match address {
 				0..=0xFF if !self.memory.bootrom_disabled => self.memory.bootrom[address as usize],
 				0..=0x7FFF => match self.cartridge.as_ref() {
@@ -669,7 +622,7 @@ impl<S: SerialWriter> Gameboy<S> {
 			}
 		} else {
 			match address {
-				0..=0xFEFF => 0,
+				0..=0xFEFF => 0xFF,
 				0xFF00..=0xFF7F => self.cpu_read_io(address),
 				0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80],
 				0xFFFF => self.interrupts.interrupt_enable,
@@ -699,7 +652,7 @@ impl<S: SerialWriter> Gameboy<S> {
 			log::info!("Triggered write bp @ {:#X} (value: {:#02X})", address, value);
 		}
 
-		if self.dma.remaining_cycles == 0 {
+		if !self.ppu.dma_occuring {
 			match address {
 				0..=0xFF if !self.memory.bootrom_disabled => {}
 				0..=0x7FFF => {
@@ -719,14 +672,14 @@ impl<S: SerialWriter> Gameboy<S> {
 				0xFEA0..=0xFEFF => {}
 				0xFF00..=0xFF7F => self.cpu_write_io(address, value),
 				0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80] = value,
-				0xFFFF => self.interrupts.interrupt_enable = value & 0b1_1111,
+				0xFFFF => self.interrupts.cpu_set_interrupt_enable(value),
 			}
 		} else {
 			match address {
 				0..=0xFEFF => {}
 				0xFF00..=0xFF7F => self.cpu_write_io(address, value),
 				0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80] = value,
-				0xFFFF => self.interrupts.interrupt_enable = value & 0b1_1111,
+				0xFFFF => self.interrupts.cpu_set_interrupt_enable(value),
 			}
 		}
 	}

@@ -43,7 +43,7 @@ pub struct Joypad {
 impl Joypad {
 	pub fn new() -> Self {
 		Self {
-			mode: JoypadMode::Direction,
+			mode: JoypadMode::Both,
 			down: false,
 			up: false,
 			left: false,
@@ -57,7 +57,7 @@ impl Joypad {
 	}
 
 	pub fn cpu_read(&self) -> u8 {
-		match self.mode {
+		(0b11 << 6) | match self.mode {
 			JoypadMode::Action => {
 				(1 << 4)
 					| ((!self.start as u8) << 3)
@@ -72,7 +72,7 @@ impl Joypad {
 					| ((!self.left as u8) << 1)
 					| (!self.right as u8)
 			}
-			JoypadMode::Both => 0x3F,
+			JoypadMode::Both => 0b1111,
 		}
 	}
 

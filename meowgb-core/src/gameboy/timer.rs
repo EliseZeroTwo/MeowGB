@@ -17,7 +17,7 @@ impl Timer {
 			clock: TimerClock::C1024,
 			tima: 0,
 			tma: 0,
-			div: 0,
+			div: 0xAD,
 			div_counter: 0,
 			tima_counter: 0,
 			overflow: false,
@@ -50,7 +50,7 @@ impl Timer {
 	}
 
 	pub fn read_tac(&self) -> u8 {
-		((self.enable as u8) << 2) | self.clock.tac_clock()
+		((self.enable as u8) << 2) | self.clock.tac_clock() | 0b1111_1000
 	}
 
 	pub fn write_tac(&mut self, value: u8) {

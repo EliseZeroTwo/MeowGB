@@ -15,4 +15,11 @@ impl Memory {
 			bootrom_disabled: bootrom.is_none(),
 		}
 	}
+
+	pub fn get_bootrom_disabled(&self) -> u8 {
+		match self.bootrom_disabled {
+			true => 0xFF,
+			false => 0x00,
+		}
+	}
 }

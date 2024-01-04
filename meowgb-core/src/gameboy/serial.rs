@@ -15,7 +15,7 @@ impl<T: Write> SerialWriter for T {
 
 pub struct Serial<S: SerialWriter> {
 	pub sb: u8,
-	pub sc: u8,
+	sc: u8,
 
 	internal_tick: u16,
 	writer: S,
@@ -37,6 +37,14 @@ impl<S: SerialWriter> Serial<S> {
 
 	pub fn is_conductor(&self) -> bool {
 		self.sc & 0b1 == 1
+	}
+
+	pub fn set_sc(&mut self, value: u8) {
+		self.sc = value | (0b0111_1110);
+	}
+
+	pub fn get_sc(&self) -> u8 {
+		self.sc | (0b0111_1110)
 	}
 
 	#[allow(unused)]
