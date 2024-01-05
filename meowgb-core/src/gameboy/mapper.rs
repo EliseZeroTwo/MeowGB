@@ -4,7 +4,9 @@ pub trait Mapper {
 	fn read_rom_u8(&self, address: u16) -> u8;
 	fn write_rom_u8(&mut self, address: u16, value: u8);
 
+	/// The address passed into this function MUST be zero indexed
 	fn read_eram_u8(&self, address: u16) -> u8;
+	/// The address passed into this function MUST be zero indexed
 	fn write_eram_u8(&mut self, address: u16, value: u8);
 }
 

@@ -53,7 +53,7 @@ impl Sound {
 			nr50: 0b0111_0111,
 			nr51: 0b1111_0011,
 			nr52: 0b1111_0001,
-			wave_pattern_ram: [0u8;16],
+			wave_pattern_ram: [0u8; 16],
 		}
 	}
 }

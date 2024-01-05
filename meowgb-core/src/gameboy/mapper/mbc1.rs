@@ -99,16 +99,23 @@ impl Mapper for MBC1 {
 		}
 	}
 
-	fn read_eram_u8(&self, _address: u16) -> u8 {
+	fn read_eram_u8(&self, address: u16) -> u8 {
 		match self.ram.as_ref() {
-			Some(_ram) => 0,
-			None => 0,
+			Some(ram) => match self.is_large_rom() {
+				true => ram[address as usize],
+				false => ram[(self.extra_2_bit_reg as usize * 0x2000) + address as usize],
+			},
+			None => 0xFF,
 		}
 	}
 
-	fn write_eram_u8(&mut self, _address: u16, _value: u8) {
-		match self.ram.as_ref() {
-			Some(_ram) => {}
+	fn write_eram_u8(&mut self, address: u16, value: u8) {
+		let is_large_rom = self.is_large_rom();
+		match self.ram.as_mut() {
+			Some(ram) => match is_large_rom {
+				true => ram[address as usize] = value,
+				false => ram[(self.extra_2_bit_reg as usize * 0x2000) + address as usize] = value,
+			},
 			None => {}
 		}
 	}

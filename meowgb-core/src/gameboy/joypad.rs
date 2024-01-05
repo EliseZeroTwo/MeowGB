@@ -57,23 +57,23 @@ impl Joypad {
 	}
 
 	pub fn cpu_read(&self) -> u8 {
-		(0b11 << 6) | match self.mode {
-			JoypadMode::Action => {
-				(1 << 4)
-					| ((!self.start as u8) << 3)
-					| ((!self.select as u8) << 2)
-					| ((!self.b as u8) << 1)
-					| (!self.a as u8)
+		(0b11 << 6)
+			| match self.mode {
+				JoypadMode::Action => {
+					(1 << 4)
+						| ((!self.start as u8) << 3)
+						| ((!self.select as u8) << 2)
+						| ((!self.b as u8) << 1) | (!self.a as u8)
+				}
+				JoypadMode::Direction => {
+					(1 << 5)
+						| ((!self.down as u8) << 3)
+						| ((!self.up as u8) << 2)
+						| ((!self.left as u8) << 1)
+						| (!self.right as u8)
+				}
+				JoypadMode::Both => 0b1111,
 			}
-			JoypadMode::Direction => {
-				(1 << 5)
-					| ((!self.down as u8) << 3)
-					| ((!self.up as u8) << 2)
-					| ((!self.left as u8) << 1)
-					| (!self.right as u8)
-			}
-			JoypadMode::Both => 0b1111,
-		}
 	}
 
 	joypad_input!(a, Action);

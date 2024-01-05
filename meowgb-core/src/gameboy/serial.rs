@@ -1,5 +1,7 @@
 use std::io::Write;
 
+use super::interrupts::Interrupts;
+
 pub trait SerialWriter {
 	fn write_byte(&mut self, byte: u8);
 }
@@ -53,7 +55,7 @@ impl<S: SerialWriter> Serial<S> {
 		self.sc |= conductor as u8;
 	}
 
-	pub fn tick(&mut self) -> bool {
+	pub fn tick(&mut self, interrupts: &mut Interrupts) {
 		if self.get_transfer_in_process() && self.is_conductor() {
 			if self.internal_tick < 128 {
 				self.internal_tick += 1;
@@ -62,9 +64,8 @@ impl<S: SerialWriter> Serial<S> {
 				self.sb = 0;
 				self.set_transfer_in_process(false);
 				self.internal_tick = 0;
-				return true;
+				interrupts.write_if_serial(true);
 			}
 		}
-		false
 	}
 }

@@ -238,19 +238,16 @@ pub fn tick_cpu(state: &mut Gameboy<impl SerialWriter>) {
 	} else {
 		let opcode = match state.registers.current_opcode {
 			Some(opcode) => opcode,
-			None => {
-				state.pc_history.push(state.registers.pc);
-				match state.registers.mem_read_hold.take() {
-					Some(opcode) => {
-						state.registers.current_opcode = Some(opcode);
-						opcode
-					}
-					None => {
-						state.cpu_read_u8(state.registers.pc);
-						return;
-					}
+			None => match state.registers.mem_read_hold.take() {
+				Some(opcode) => {
+					state.registers.current_opcode = Some(opcode);
+					opcode
 				}
-			}
+				None => {
+					state.cpu_read_u8(state.registers.pc);
+					return;
+				}
+			},
 		};
 
 		let result: CycleResult = match opcode {

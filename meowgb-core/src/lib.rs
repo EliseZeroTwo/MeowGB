@@ -1,5 +1,9 @@
 pub mod gameboy;
+pub mod ringbuffer;
 
+/// A helper for writing CPU tests in Rust, the emulator returned by this
+/// function has already fetched the first instruction. The next tick will be
+/// the first tick of the instruction
 pub fn setup_test_emulator<const ROM_LENGTH: usize>(
 	test_opcodes: [u8; ROM_LENGTH],
 ) -> gameboy::Gameboy<std::io::Stdout> {

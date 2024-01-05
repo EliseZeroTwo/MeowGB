@@ -28,9 +28,6 @@ pub struct CliArgs {
 	/// game path
 	#[clap(long)]
 	pub rom: Option<PathBuf>,
-	// enter in debu g mode
-	#[clap(short, long)]
-	pub debug: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -99,11 +96,6 @@ pub fn run_gameboy(
 ) -> Result<(), MeowGBError> {
 	let mut gameboy = gameboy_arc.write().unwrap();
 
-	if args.debug {
-		gameboy.single_step = true;
-		tx.send(GameboyEvent::Framebuffer(gameboy.ppu.write_fb())).unwrap();
-	}
-
 	if let Some(rom) = args.rom {
 		if !rom.is_file() {
 			return Err(MeowGBError::GameNotFound);
@@ -132,18 +124,14 @@ pub fn run_gameboy(
 				EmulatorWindowEvent::DownToggle => gameboy.joypad.invert_down(),
 				EmulatorWindowEvent::LeftToggle => gameboy.joypad.invert_left(),
 				EmulatorWindowEvent::RightToggle => gameboy.joypad.invert_right(),
-				EmulatorWindowEvent::PauseToggle => gameboy.single_step = !gameboy.single_step,
+				EmulatorWindowEvent::PauseToggle => unimplemented!(),
 				EmulatorWindowEvent::Exit => break 'outer,
 			}
 		}
 
-		let (redraw_needed, time_spent_debugging) = gameboy.tick_4();
+		let redraw_needed = gameboy.tick_4();
 
 		drop(gameboy);
-
-		if let Some(diff) = time_spent_debugging {
-			goal = goal + diff;
-		}
 
 		if redraw_needed {
 			let now = time::OffsetDateTime::now_utc();

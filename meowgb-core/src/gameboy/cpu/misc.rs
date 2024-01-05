@@ -56,12 +56,12 @@ opcode!(stop, 0x10, "STOP", false, 1, {
 				true => {
 					state.registers.pc = state.registers.pc.wrapping_add(1);
 					state.stop = true;
-					state.timer.div = 0;
+					state.timer.write_div();
 				},
 				false => {
 					state.registers.pc = state.registers.pc.wrapping_add(2);
 					state.stop = true;
-					state.timer.div = 0;
+					state.timer.write_div();
 				}
 			},
 		}

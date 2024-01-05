@@ -1,9 +1,43 @@
 # Passing Tests
 
-* blargg/cpu_instrs.gb
-* blargg/instr_timing.gb
-* blargg/mem_timing.gb
-* mts/acceptance/ppu/intr_1_2_timing-GS.gb (VBlank intr -> OAM intr timing)
-* mts/acceptance/ppu/intr_2_0_timing.gb (VBlank intr -> HBlank intr timing) (I think this shouldn't pass, i believe i'm triggering the HBlank IRQ one CPU cycle late)
-* mts/acceptance/ppu/stat_lyc_onoff.gb (LY==LYC handling with PPU being enabled and disabled)
-* mts/acceptance/ppu/stat_irq_blocking.gb (LCD status IRQ blocking)
+## Blargg's Test ROMs
+
+* cpu_instrs.gb - [ROM](./test-roms/blargg/roms/cpu_instrs.gb) - [Expected Serial Output](./meowgb-tests/expected_output/cpu_instrs.bin)
+* instr_timing.gb - [ROM](./test-roms/blargg/roms/instr_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/instr_timing.bin)
+* mem_timing.gb - [ROM](./test-roms/blargg/roms/mem_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/mem_timing.bin)
+
+## Mooneye Test Suite
+
+* basic.gb - [ROM](./test-roms/mooneye-test-suite/roms/basic.gb) - [Expected Serial Output](./meowgb-tests/expected_output/basic.bin)
+* boot_hwio-dmgABCmgb.gb - [ROM](./test-roms/mooneye-test-suite/roms/boot_hwio-dmgABCmgb.gb) - [Expected Serial Output](./meowgb-tests/expected_output/boot_hwio-dmgABCmgb.bin)
+* boot_regs-dmgABC.gb - [ROM](./test-roms/mooneye-test-suite/roms/boot_regs-dmgABC.gb) - [Expected Serial Output](./meowgb-tests/expected_output/boot_regs-dmgABC.bin)
+* daa.gb - [ROM](./test-roms/mooneye-test-suite/roms/daa.gb) - [Expected Serial Output](./meowgb-tests/expected_output/daa.bin)
+* div_timing.gb - [ROM](./test-roms/mooneye-test-suite/roms/div_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/div_timing.bin)
+* div_write.gb - [ROM](./test-roms/mooneye-test-suite/roms/div_write.gb) - [Expected Serial Output](./meowgb-tests/expected_output/div_write.bin)
+* ei_sequence.gb - [ROM](./test-roms/mooneye-test-suite/roms/ei_sequence.gb) - [Expected Serial Output](./meowgb-tests/expected_output/ei_sequence.bin)
+* ei_timing.gb - [ROM](./test-roms/mooneye-test-suite/roms/ei_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/ei_timing.bin)
+* halt_ime0_ei.gb - [ROM](./test-roms/mooneye-test-suite/roms/halt_ime0_ei.gb) - [Expected Serial Output](./meowgb-tests/expected_output/halt_ime0_ei.bin)
+* intr_1_2_timing-GS.gb - [ROM](./test-roms/mooneye-test-suite/roms/intr_1_2_timing-GS.gb) - [Expected Serial Output](./meowgb-tests/expected_output/intr_1_2_timing-GS.bin)
+* intr_2_0_timing.gb - [ROM](./test-roms/mooneye-test-suite/roms/intr_2_0_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/intr_2_0_timing.bin)
+* mem_oam.gb - [ROM](./test-roms/mooneye-test-suite/roms/mem_oam.gb) - [Expected Serial Output](./meowgb-tests/expected_output/mem_oam.bin)
+* oam_dma_restart.gb - [ROM](./test-roms/mooneye-test-suite/roms/oam_dma_restart.gb) - [Expected Serial Output](./meowgb-tests/expected_output/oam_dma_restart.bin)
+* oam_dma_start.gb - [ROM](./test-roms/mooneye-test-suite/roms/oam_dma_start.gb) - [Expected Serial Output](./meowgb-tests/expected_output/oam_dma_start.bin)
+* oam_dma_timing.gb - [ROM](./test-roms/mooneye-test-suite/roms/oam_dma_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/oam_dma_timing.bin)
+* rapid_di_ei.gb - [ROM](./test-roms/mooneye-test-suite/roms/rapid_di_ei.gb) - [Expected Serial Output](./meowgb-tests/expected_output/rapid_di_ei.bin)
+* rapid_toggle.gb - [ROM](./test-roms/mooneye-test-suite/roms/rapid_toggle.gb) - [Expected Serial Output](./meowgb-tests/expected_output/rapid_toggle.bin)
+* reg_f.gb - [ROM](./test-roms/mooneye-test-suite/roms/reg_f.gb) - [Expected Serial Output](./meowgb-tests/expected_output/reg_f.bin)
+* reg_read.gb - [ROM](./test-roms/mooneye-test-suite/roms/reg_read.gb) - [Expected Serial Output](./meowgb-tests/expected_output/reg_read.bin)
+* stat_irq_blocking.gb - [ROM](./test-roms/mooneye-test-suite/roms/stat_irq_blocking.gb) - [Expected Serial Output](./meowgb-tests/expected_output/stat_irq_blocking.bin)
+* stat_lyc_onoff.gb - [ROM](./test-roms/mooneye-test-suite/roms/stat_lyc_onoff.gb) - [Expected Serial Output](./meowgb-tests/expected_output/stat_lyc_onoff.bin)
+* tim00.gb - [ROM](./test-roms/mooneye-test-suite/roms/tim00.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tim00.bin)
+* tim00_div_trigger.gb - [ROM](./test-roms/mooneye-test-suite/roms/tim00_div_trigger.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tim00_div_trigger.bin)
+* tim01.gb - [ROM](./test-roms/mooneye-test-suite/roms/tim01.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tim01.bin)
+* tim01_div_trigger.gb - [ROM](./test-roms/mooneye-test-suite/roms/tim01_div_trigger.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tim01_div_trigger.bin)
+* tim10.gb - [ROM](./test-roms/mooneye-test-suite/roms/tim10.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tim10.bin)
+* tim10_div_trigger.gb - [ROM](./test-roms/mooneye-test-suite/roms/tim10_div_trigger.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tim10_div_trigger.bin)
+* tim11.gb - [ROM](./test-roms/mooneye-test-suite/roms/tim11.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tim11.bin)
+* tim11_div_trigger.gb - [ROM](./test-roms/mooneye-test-suite/roms/tim11_div_trigger.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tim11_div_trigger.bin)
+* tima_reload.gb - [ROM](./test-roms/mooneye-test-suite/roms/tima_reload.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tima_reload.bin)
+* tima_write_reloading.gb - [ROM](./test-roms/mooneye-test-suite/roms/tima_write_reloading.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tima_write_reloading.bin)
+* tma_write_reloading.gb - [ROM](./test-roms/mooneye-test-suite/roms/tma_write_reloading.gb) - [Expected Serial Output](./meowgb-tests/expected_output/tma_write_reloading.bin)
+* unused_hwio-GS.gb - [ROM](./test-roms/mooneye-test-suite/roms/unused_hwio-GS.gb) - [Expected Serial Output](./meowgb-tests/expected_output/unused_hwio-GS.bin)
