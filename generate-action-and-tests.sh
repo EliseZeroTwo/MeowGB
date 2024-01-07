@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 GH_ACTION_OUTPUT_FILE=./.github/workflows/action.yml
 FJ_ACTION_OUTPUT_FILE=./.forgejo/workflows/action.yml
 TEST_SCRIPT_OUTPUT_FILE=./run-test-roms.sh
@@ -50,7 +50,7 @@ cat >>$TEST_MD_FILE << EOF
 
 EOF
 
-for full_f in ./test-roms/blargg/roms/*
+for full_f in ./test-roms/blargg/roms/*.gb
 do
     f="${full_f##*/}"; f="${f%.*}";
     TEST_CMD="./target/release/meowgb-tests test-roms/blargg/roms/$f.gb test -m 100000000 -s meowgb-tests/expected_output/$f.bin"
@@ -86,10 +86,46 @@ cat >>$TEST_MD_FILE << EOF
 
 EOF
 
-for full_f in ./test-roms/mooneye-test-suite/roms/*
+for full_f in ./test-roms/mooneye-test-suite/roms/*.gb
 do
     f="${full_f##*/}"; f="${f%.*}";
       TEST_CMD="./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/$f.gb test -m 100000000 -s meowgb-tests/expected_output/$f.bin"
+
+    cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF
+
+echo "Running test ROM $full_f"
+
+TEST_TOTAL=\$((TEST_TOTAL + 1))
+
+if res=\$($TEST_CMD 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=\$((TEST_SUCCESS + 1))
+else
+  echo "Failed: \$res"
+fi
+EOF
+
+    cat >>$TEST_MD_FILE << EOF
+* $f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/$f.bin)
+EOF
+
+    tee -a $GH_ACTION_OUTPUT_FILE $FJ_ACTION_OUTPUT_FILE >/dev/null << EOF
+
+      - name: Run test ROM (mooneye-test-suite $f)
+        if: always()
+        run: $TEST_CMD
+EOF
+done
+
+cat >>$TEST_MD_FILE << EOF
+
+### MBC1
+
+EOF
+
+for full_f in ./test-roms/mooneye-test-suite/roms/MBC1/**.gb
+do
+    f="${full_f##*/}"; f="${f%.*}";
+      TEST_CMD="./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/$f.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/$f.bin"
 
     cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF
 

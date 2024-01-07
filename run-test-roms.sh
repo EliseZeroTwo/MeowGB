@@ -367,4 +367,144 @@ else
   echo "Failed: $res"
 fi
 
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/vblank_stat_intr-GS.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/vblank_stat_intr-GS.gb test -m 100000000 -s meowgb-tests/expected_output/vblank_stat_intr-GS.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/bits_bank1.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/bits_bank1.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/bits_bank1.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/bits_bank2.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/bits_bank2.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/bits_bank2.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/bits_mode.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/bits_mode.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/bits_mode.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/bits_ramg.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/bits_ramg.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/bits_ramg.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/multicart_rom_8Mb.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/multicart_rom_8Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/multicart_rom_8Mb.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/ram_256kb.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/ram_256kb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/ram_256kb.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/ram_64kb.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/ram_64kb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/ram_64kb.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/rom_16Mb.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_16Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_16Mb.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/rom_1Mb.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_1Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_1Mb.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/rom_2Mb.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_2Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_2Mb.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/rom_4Mb.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_4Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_4Mb.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/rom_512kb.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_512kb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_512kb.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/MBC1/rom_8Mb.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_8Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_8Mb.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
 echo "Succeeded in running $TEST_SUCCESS/$TEST_TOTAL"

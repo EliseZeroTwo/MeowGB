@@ -94,7 +94,7 @@ impl<const SIZE: usize> WrappedBuffer<SIZE> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PPUMode {
 	/// Mode 0
-	HBlank,
+	HBlank = 0,
 	/// Mode 1
 	VBlank,
 	/// Mode 2
@@ -272,6 +272,8 @@ pub struct PpuRegisters {
 	pub scy: u8,
 	pub scx: u8,
 	pub ly: u8,
+	cycles_since_last_ly_increment: u64,
+	cycles_since_last_last_mode_start_increment: [u64; 4],
 	pub lyc: u8,
 	pub wy: u8,
 	pub wx: u8,
@@ -335,6 +337,8 @@ impl Ppu {
 				scy: 0,
 				scx: 0,
 				ly: 0,
+				cycles_since_last_ly_increment: 0,
+				cycles_since_last_last_mode_start_increment: [0; 4],
 				lyc: 0,
 				wy: 0,
 				wx: 0,
@@ -517,6 +521,7 @@ impl Ppu {
 	}
 
 	pub fn set_mode(&mut self, interrupts: &mut Interrupts, mode: PPUMode) {
+		self.registers.cycles_since_last_last_mode_start_increment[mode.mode_flag() as usize] = 0;
 		if mode == PPUMode::HBlank {
 			assert_eq!(self.mode(), PPUMode::TransferringData);
 			assert!(self.current_dot >= 172);
@@ -545,6 +550,18 @@ impl Ppu {
 	}
 
 	fn set_scanline(&mut self, interrupts: &mut Interrupts, scanline: u8) {
+		// println!("LY incrementing: {} cycles since last incrementation. cycles since: {:?}", self.registers.cycles_since_last_ly_increment, self.registers.cycles_since_last_last_mode_start_increment.iter().enumerate().map(|(idx, value)| {
+		// 		let idx_enum = match idx {
+		// 			0 => PPUMode::HBlank,
+		// 			1 => PPUMode::VBlank,
+		// 			2 => PPUMode::SearchingOAM,
+		// 			3 => PPUMode::TransferringData,
+		// 			_ => unreachable!(),
+		// 		};
+
+		// 		(idx_enum, value)
+		// 	}).collect::<Vec<_>>());
+		self.registers.cycles_since_last_ly_increment = 0;
 		self.registers.ly = scanline;
 		self.handle_stat_irq(interrupts);
 		self.registers.ly_lyc = self.registers.ly == self.registers.lyc;
@@ -552,8 +569,10 @@ impl Ppu {
 
 	pub fn tick(&mut self, interrupts: &mut Interrupts) -> bool {
 		if self.enabled() {
+			self.registers.cycles_since_last_ly_increment += 1;
 			match self.mode() {
 				PPUMode::SearchingOAM => {
+					self.registers.cycles_since_last_last_mode_start_increment[2] += 1;
 					if self.current_dot == 0 {
 						if self.registers.ly == 0 {
 							self.wy_match = self.registers.wy == self.registers.ly;
@@ -600,6 +619,7 @@ impl Ppu {
 					false
 				}
 				PPUMode::TransferringData => {
+					self.registers.cycles_since_last_last_mode_start_increment[3] += 1;
 					if !self.first_frame && self.current_dot == 0 {
 						assert_eq!(self.total_dots, 80);
 					}
@@ -617,11 +637,8 @@ impl Ppu {
 					self.current_dot += 1;
 					self.total_dots += 1;
 
-					// if self.current_dot == self.dot_target - 1 {
-					//     self.handle_stat_irq(interrupts, true);
-					// }
-
 					if self.current_dot == self.dot_target {
+						// println!("Mode 3 DT: {}", self.dot_target);
 						// assert_eq!(self.total_dots, match self.first_frame && self.first_line {
 						//     true => self.dot_target,
 						//     false => 80 + self.dot_target
@@ -633,17 +650,24 @@ impl Ppu {
 					false
 				}
 				PPUMode::HBlank => {
-					if self.first_line && self.current_dot == 64 && self.dot_target == 0 {
+					self.registers.cycles_since_last_last_mode_start_increment[0] += 1;
+					self.current_dot += 1;
+					self.total_dots += 1;
+					if !self.first_line {
+						assert_ne!(self.dot_target, 0);
+					}
+					if self.first_line && self.current_dot == 80 && self.dot_target == 0 {
 						self.set_mode(interrupts, PPUMode::TransferringData);
 					} else if self.dot_target != 0 && self.current_dot == self.dot_target {
+						// println!("Mode 0 DT: {}", self.dot_target);
 						self.set_scanline(interrupts, self.registers.ly + 1);
 
 						assert_eq!(
 							self.total_dots,
-							match self.first_frame && self.first_line {
-								true => 456 - (80 - 64),
-								false => 456,
-							}
+							456 // match self.first_frame && self.first_line {
+							// 	true => 456 - (80 - 64),
+							// 	false => 456,
+							// }
 						);
 						self.total_dots = 0;
 						self.first_line = false;
@@ -654,18 +678,14 @@ impl Ppu {
 						};
 
 						self.set_mode(interrupts, next_mode);
-					} else {
-						self.current_dot += 1;
-						self.total_dots += 1;
-						if !self.first_line {
-							assert_ne!(self.dot_target, 0);
-						}
 					}
 
 					false
 				}
 				PPUMode::VBlank => {
-					if self.current_dot != 0 && self.current_dot % 456 == 0 {
+					self.registers.cycles_since_last_last_mode_start_increment[1] += 1;
+					self.current_dot += 1;
+					if self.current_dot % 456 == 0 {
 						if self.registers.ly >= 153 {
 							self.set_scanline(interrupts, 0);
 							self.set_mode(interrupts, PPUMode::SearchingOAM);
@@ -673,12 +693,10 @@ impl Ppu {
 							true
 						} else {
 							self.set_scanline(interrupts, self.registers.ly + 1);
-							self.current_dot += 1;
 							false
 						}
 					} else {
 						assert!(self.current_dot < 4560);
-						self.current_dot += 1;
 						false
 					}
 				}
@@ -711,8 +729,10 @@ impl Ppu {
 			Some(state) => state,
 			None => {
 				let scrolling_delay = self.registers.scx % 8;
+				// println!("{}", scrolling_delay);
 				self.dot_target += scrolling_delay as u16;
 				if scrolling_delay != 0 {
+					// println!("Scrolling delay of {:#X} with scx of {}", scrolling_delay, self.registers.scx);
 					LineDrawingState::BackgroundScrolling(
 						scrolling_delay as usize,
 						self.registers.scx,

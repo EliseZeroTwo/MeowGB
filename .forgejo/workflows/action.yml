@@ -161,3 +161,59 @@ jobs:
       - name: Run test ROM (mooneye-test-suite unused_hwio-GS)
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/unused_hwio-GS.gb test -m 100000000 -s meowgb-tests/expected_output/unused_hwio-GS.bin
+
+      - name: Run test ROM (mooneye-test-suite vblank_stat_intr-GS)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/vblank_stat_intr-GS.gb test -m 100000000 -s meowgb-tests/expected_output/vblank_stat_intr-GS.bin
+
+      - name: Run test ROM (mooneye-test-suite bits_bank1)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/bits_bank1.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/bits_bank1.bin
+
+      - name: Run test ROM (mooneye-test-suite bits_bank2)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/bits_bank2.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/bits_bank2.bin
+
+      - name: Run test ROM (mooneye-test-suite bits_mode)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/bits_mode.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/bits_mode.bin
+
+      - name: Run test ROM (mooneye-test-suite bits_ramg)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/bits_ramg.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/bits_ramg.bin
+
+      - name: Run test ROM (mooneye-test-suite multicart_rom_8Mb)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/multicart_rom_8Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/multicart_rom_8Mb.bin
+
+      - name: Run test ROM (mooneye-test-suite ram_256kb)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/ram_256kb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/ram_256kb.bin
+
+      - name: Run test ROM (mooneye-test-suite ram_64kb)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/ram_64kb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/ram_64kb.bin
+
+      - name: Run test ROM (mooneye-test-suite rom_16Mb)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_16Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_16Mb.bin
+
+      - name: Run test ROM (mooneye-test-suite rom_1Mb)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_1Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_1Mb.bin
+
+      - name: Run test ROM (mooneye-test-suite rom_2Mb)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_2Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_2Mb.bin
+
+      - name: Run test ROM (mooneye-test-suite rom_4Mb)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_4Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_4Mb.bin
+
+      - name: Run test ROM (mooneye-test-suite rom_512kb)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_512kb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_512kb.bin
+
+      - name: Run test ROM (mooneye-test-suite rom_8Mb)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/rom_8Mb.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/rom_8Mb.bin

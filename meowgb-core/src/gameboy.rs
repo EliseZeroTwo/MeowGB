@@ -221,7 +221,10 @@ impl<S: SerialWriter> Gameboy<S> {
 			}
 			0xFF41 => self.ppu.set_stat(&mut self.interrupts, value),
 			0xFF42 => self.ppu.registers.scy = value,
-			0xFF43 => self.ppu.registers.scx = value,
+			0xFF43 => {
+				// println!("Setting SCX to {} from {}", value, self.ppu.registers.scx);
+				self.ppu.registers.scx = value;
+			},
 			0xFF44 => {} // LY is read only
 			0xFF45 => self.ppu.set_lyc(&mut self.interrupts, value),
 			0xFF46 => self.dma.init_request(value),
