@@ -1,4 +1,5 @@
 pub mod gameboy;
+#[cfg(feature = "instr-dbg")]
 pub mod ringbuffer;
 
 /// A helper for writing CPU tests in Rust, the emulator returned by this

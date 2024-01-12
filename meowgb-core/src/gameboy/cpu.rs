@@ -142,6 +142,8 @@ impl Registers {
 
 pub fn tick_cpu(state: &mut Gameboy<impl SerialWriter>) {
 	state.registers.mem_op_happened = false;
+	state.last_read = None;
+	state.last_write = None;
 
 	if state.joypad.interrupt_triggered {
 		state.joypad.interrupt_triggered = false;
@@ -162,7 +164,6 @@ pub fn tick_cpu(state: &mut Gameboy<impl SerialWriter>) {
 		}
 	}
 
-	// TODO: Interrupts
 	if state.registers.cycle == 0 && state.interrupts.ime {
 		if state.interrupts.read_ie_vblank() && state.interrupts.read_if_vblank() {
 			state.registers.in_interrupt_vector = Some(0);
@@ -244,7 +245,7 @@ pub fn tick_cpu(state: &mut Gameboy<impl SerialWriter>) {
 					opcode
 				}
 				None => {
-					state.cpu_read_u8(state.registers.pc);
+					state.cpu_read_u8_internal(state.registers.pc, true);
 					return;
 				}
 			},
@@ -533,7 +534,7 @@ pub fn tick_cpu(state: &mut Gameboy<impl SerialWriter>) {
 		}
 
 		if !state.registers.mem_op_happened {
-			state.cpu_read_u8(state.registers.pc);
+			state.cpu_read_u8_internal(state.registers.pc, true);
 		}
 
 		state.registers.cycle = 0;

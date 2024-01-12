@@ -41,17 +41,15 @@ impl Mapper for NoMBC {
 	fn write_rom_u8(&mut self, _address: u16, _value: u8) {}
 
 	fn read_eram_u8(&self, address: u16) -> u8 {
-		let decoded_address = address - 0xA000;
 		match &self.ram {
-			Some(ram) => ram[decoded_address as usize],
+			Some(ram) => ram[address as usize],
 			None => 0,
 		}
 	}
 
 	fn write_eram_u8(&mut self, address: u16, value: u8) {
-		let decoded_address = address - 0xA000;
 		if let Some(ram) = &mut self.ram {
-			ram[decoded_address as usize] = value;
+			ram[address as usize] = value;
 		}
 	}
 }

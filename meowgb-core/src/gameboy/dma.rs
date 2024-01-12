@@ -38,25 +38,25 @@ impl DmaState {
 
 		if self.remaining_cycles > 0 {
 			let offset = 0xA0 - self.remaining_cycles;
+			let read_address = ((self.original_base as usize) << 8) | offset as usize;
 
 			let value = if self.original_base <= 0x7F {
 				match cartridge {
-					Some(cart) => cart.read_rom_u8((self.base as u16) << 8 | offset as u16),
+					Some(cart) => cart.read_rom_u8(read_address as u16),
 					None => 0xFF,
 				}
 			} else if self.original_base <= 0x9F {
-				let address = (((self.original_base as usize) << 8) | offset as usize) - 0x8000;
+				let address = read_address - 0x8000;
 				ppu.vram[address]
 			} else if self.original_base <= 0xDF {
-				let address = ((self.original_base as usize) << 8 | offset as usize) - 0xC000;
+				let address = read_address - 0xC000;
 				memory.wram[address]
 			} else if self.original_base <= 0xFD {
-				let address = ((self.original_base as usize) << 8 | offset as usize) - 0xE000;
+				let address = read_address - 0xE000;
 				memory.wram[address]
 			} else {
 				0xFF
 			};
-
 			ppu.dma_write_oam(offset, value);
 			self.remaining_cycles -= 1;
 		}

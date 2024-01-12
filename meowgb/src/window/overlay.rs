@@ -1,10 +1,13 @@
 /// Provides an [egui] based overlay for debugigng the emulator whilst it is
 /// running
-use egui::{ClippedPrimitive, Context, TexturesDelta};
+use egui::{ClippedPrimitive, Context, Grid, TexturesDelta};
 use egui_wgpu::renderer::{Renderer, ScreenDescriptor};
-use meowgb_core::gameboy::{serial::SerialWriter, Gameboy};
+use meowgb_core::gameboy::serial::SerialWriter;
 use pixels::{wgpu, PixelsContext};
 use winit::{event_loop::EventLoopWindowTarget, window::Window};
+
+use super::events::{EmulatorDebugEvent, EmulatorWindowEvent};
+use crate::WrappedGameboy;
 
 pub(crate) struct Framework {
 	egui_ctx: Context,
@@ -16,13 +19,55 @@ pub(crate) struct Framework {
 	pub gui: Gui,
 }
 
-pub struct Gui {
+#[derive(Debug, Clone, Copy)]
+pub struct GuiWindowState {
 	pub window_open: bool,
 	pub register_window_open: bool,
 	pub ppu_register_window_open: bool,
+	pub debugger_window_open: bool,
+	pub wram_window_open: bool,
+	pub oam_window_open: bool,
+	pub hram_window_open: bool,
+}
 
+impl GuiWindowState {
+	pub fn close_all(&mut self) {
+		self.ppu_register_window_open = false;
+		self.register_window_open = false;
+		self.window_open = false;
+		self.debugger_window_open = false;
+		self.wram_window_open = false;
+		self.oam_window_open = false;
+		self.hram_window_open = false;
+	}
+
+	pub fn any_open(&self) -> bool {
+		self.window_open
+			|| self.register_window_open
+			|| self.ppu_register_window_open
+			|| self.debugger_window_open
+			|| self.wram_window_open
+			|| self.oam_window_open
+			|| self.hram_window_open
+	}
+}
+
+pub struct Gui {
+	pub state: GuiWindowState,
+	pub state_restore: Option<GuiWindowState>,
 	pub registers: meowgb_core::gameboy::cpu::Registers,
 	pub ppu_registers: meowgb_core::gameboy::ppu::PpuRegisters,
+	pub wram: [u8; 0x2000],
+	pub hram: [u8; 0xAF],
+	// pub vram: [u8; 0x2000],
+	pub oam: [u8; 0xA0],
+	pub bp_string: String,
+	pub bp_read_checkbox: bool,
+	pub bp_write_checkbox: bool,
+	pub bp_execute_checkbox: bool,
+	pub is_debugging: bool,
+	pub breakpoints: [[bool; 3]; 0x10000],
+	pub sender: std::sync::mpsc::Sender<EmulatorWindowEvent>,
 }
 
 impl Framework {
@@ -32,7 +77,8 @@ impl Framework {
 		height: u32,
 		scale_factor: f32,
 		pixels: &pixels::Pixels,
-		gameboy: &Gameboy<impl SerialWriter>,
+		gameboy: &WrappedGameboy<impl SerialWriter>,
+		sender: std::sync::mpsc::Sender<EmulatorWindowEvent>,
 	) -> Self {
 		let max_texture_size = pixels.device().limits().max_texture_dimension_2d as usize;
 
@@ -44,7 +90,7 @@ impl Framework {
 			ScreenDescriptor { size_in_pixels: [width, height], pixels_per_point: scale_factor };
 		let renderer = Renderer::new(pixels.device(), pixels.render_texture_format(), None, 1);
 		let textures = TexturesDelta::default();
-		let gui = Gui::new(gameboy);
+		let gui = Gui::new(gameboy, sender);
 
 		Self {
 			egui_ctx,
@@ -57,8 +103,8 @@ impl Framework {
 		}
 	}
 
-	pub(crate) fn handle_event(&mut self, event: &winit::event::WindowEvent) {
-		let _ = self.egui_state.on_event(&self.egui_ctx, event);
+	pub(crate) fn handle_event(&mut self, event: &winit::event::WindowEvent) -> bool {
+		self.egui_state.on_event(&self.egui_ctx, event).repaint
 	}
 
 	pub(crate) fn resize(&mut self, width: u32, height: u32) {
@@ -71,9 +117,13 @@ impl Framework {
 		self.screen_descriptor.pixels_per_point = scale_factor as f32;
 	}
 
-	pub(crate) fn prepare(&mut self, window: &Window, gameboy: &Gameboy<impl SerialWriter>) {
-		self.gui.registers = gameboy.registers;
-		self.gui.ppu_registers = gameboy.ppu.registers;
+	pub(crate) fn prepare(&mut self, window: &Window, gameboy: &WrappedGameboy<impl SerialWriter>) {
+		self.gui.registers = gameboy.gameboy.registers;
+		self.gui.ppu_registers = gameboy.gameboy.ppu.registers;
+		self.gui.is_debugging = gameboy.debugging;
+		self.gui.oam = gameboy.gameboy.ppu.oam;
+		self.gui.hram = gameboy.gameboy.memory.hram;
+		self.gui.wram = gameboy.gameboy.memory.wram;
 
 		// Run the egui frame and create all paint jobs to prepare for rendering.
 		let raw_input = self.egui_state.take_egui_input(window);
@@ -126,62 +176,194 @@ impl Framework {
 }
 
 impl Gui {
-	fn new(gameboy: &Gameboy<impl SerialWriter>) -> Self {
+	fn new(
+		gameboy: &WrappedGameboy<impl SerialWriter>,
+		sender: std::sync::mpsc::Sender<EmulatorWindowEvent>,
+	) -> Self {
 		Self {
-			window_open: false,
-			register_window_open: false,
-			ppu_register_window_open: false,
-			registers: gameboy.registers,
-			ppu_registers: gameboy.ppu.registers,
+			state: GuiWindowState {
+				window_open: gameboy.debugging,
+				register_window_open: false,
+				ppu_register_window_open: false,
+				debugger_window_open: gameboy.debugging,
+				wram_window_open: false,
+				oam_window_open: false,
+				hram_window_open: false,
+			},
+			state_restore: None,
+			registers: gameboy.gameboy.registers,
+			ppu_registers: gameboy.gameboy.ppu.registers,
+			bp_string: String::with_capacity(16),
+			breakpoints: [[false, false, false]; 0x10000],
+			bp_read_checkbox: false,
+			bp_write_checkbox: false,
+			bp_execute_checkbox: false,
+			sender,
+			is_debugging: gameboy.debugging,
+			wram: gameboy.gameboy.memory.wram,
+			hram: gameboy.gameboy.memory.hram,
+			oam: gameboy.gameboy.ppu.oam,
 		}
 	}
 
 	fn ui(&mut self, ctx: &Context) {
-		egui::Window::new("MeowGB Debugger").open(&mut self.window_open).show(ctx, |ui| {
+		egui::Window::new("MeowGB Debugger").open(&mut self.state.window_open).show(ctx, |ui| {
+			if ui.button("Toggle Debugger Window").clicked() {
+				self.state.debugger_window_open = !self.state.debugger_window_open;
+			}
+
 			if ui.button("Toggle Register Window").clicked() {
-				self.register_window_open = !self.register_window_open;
+				self.state.register_window_open = !self.state.register_window_open;
 			}
 
 			if ui.button("Toggle PPU Window").clicked() {
-				self.ppu_register_window_open = !self.ppu_register_window_open;
-			}
-
-			if ui.button("Toggle OAM Window").clicked() {
-				self.ppu_register_window_open = !self.ppu_register_window_open;
+				self.state.ppu_register_window_open = !self.state.ppu_register_window_open;
 			}
 
 			if ui.button("Toggle BG Tiles Window").clicked() {
-				self.ppu_register_window_open = !self.ppu_register_window_open;
+				self.state.ppu_register_window_open = !self.state.ppu_register_window_open;
+			}
+
+			if ui.button("Toggle WRAM Window").clicked() {
+				self.state.wram_window_open = !self.state.wram_window_open;
+			}
+
+			if ui.button("Toggle HRAM Window").clicked() {
+				self.state.hram_window_open = !self.state.hram_window_open;
+			}
+
+			if ui.button("Toggle OAM Window").clicked() {
+				self.state.oam_window_open = !self.state.oam_window_open;
 			}
 		});
 
-		egui::Window::new("Register State").open(&mut self.register_window_open).show(ctx, |ui| {
-			ui.label(format!("AF: {:04X}", self.registers.get_af()));
-			ui.label(format!("BC: {:04X}", self.registers.get_bc()));
-			ui.label(format!("DE: {:04X}", self.registers.get_de()));
-			ui.label(format!("HL: {:04X}", self.registers.get_hl()));
-			ui.label(format!("SP: {:04X}", self.registers.get_sp()));
-			ui.label(format!("PC: {:04X}", self.registers.pc));
+		egui::Window::new("Register State").open(&mut self.state.register_window_open).show(
+			ctx,
+			|ui| {
+				ui.label(format!("AF: {:04X}", self.registers.get_af()));
+				ui.label(format!("BC: {:04X}", self.registers.get_bc()));
+				ui.label(format!("DE: {:04X}", self.registers.get_de()));
+				ui.label(format!("HL: {:04X}", self.registers.get_hl()));
+				ui.label(format!("SP: {:04X}", self.registers.get_sp()));
+				ui.label(format!("PC: {:04X}", self.registers.pc));
+			},
+		);
+
+		egui::Window::new("Debugger").open(&mut self.state.debugger_window_open).show(ctx, |ui| {
+			if ui.button("Step").clicked() {
+				let _ = self.sender.send(EmulatorWindowEvent::Debug(EmulatorDebugEvent::Step));
+			}
+			if ui.button("Continue").clicked() {
+				let _ = self.sender.send(EmulatorWindowEvent::Debug(EmulatorDebugEvent::Continue));
+			}
+			ui.label("Toggle Breakpoint");
+			ui.text_edit_singleline(&mut self.bp_string);
+			self.bp_string.retain(|x| x.is_ascii_hexdigit());
+			if let Some((fourth_index, _)) = self.bp_string.char_indices().nth(4) {
+				self.bp_string.truncate(fourth_index);
+			}
+			Grid::new("debugger_bp_select_grid").show(ui, |ui| {
+				let address = u16::from_str_radix(self.bp_string.as_str(), 16).unwrap_or_default();
+				ui.label(format!("({:#X}) ", address));
+				let [read, write, execute] = &mut self.breakpoints[address as usize];
+				let mut changed = ui.checkbox(read, "Read").clicked();
+				changed |= ui.checkbox(write, "Write").clicked();
+				changed |= ui.checkbox(execute, "Execute").clicked();
+				if changed {
+					let _ = self.sender.send(EmulatorWindowEvent::Debug(
+						EmulatorDebugEvent::ToggleBreakpoint(
+							address,
+							self.breakpoints[address as usize],
+						),
+					));
+				}
+			});
+
+			Grid::new("debugger_bp_list_grid").show(ui, |ui| {
+				ui.heading("Enabled BPs");
+				ui.end_row();
+				for (idx, [read, write, execute]) in self.breakpoints.iter_mut().enumerate() {
+					if *read || *write || *execute {
+						ui.label(format!("{:#X}: ", idx));
+						let mut changed = ui.checkbox(read, "Read").clicked();
+						changed |= ui.checkbox(write, "Write").clicked();
+						changed |= ui.checkbox(execute, "Execute").clicked();
+						if changed {
+							let _ = self.sender.send(EmulatorWindowEvent::Debug(
+								EmulatorDebugEvent::ToggleBreakpoint(
+									idx as u16,
+									[*read, *write, *execute],
+								),
+							));
+						}
+						ui.end_row();
+					}
+				}
+			});
 		});
 
-		egui::Window::new("PPU State").open(&mut self.ppu_register_window_open).show(ctx, |ui| {
-			ui.label(format!("Mode: {:?}", self.ppu_registers.mode));
-			ui.label(format!("LCDC: {:02X}", self.ppu_registers.lcdc));
-			ui.label(format!(
-				"Stat: {:02X}",
-				(1 << 7)
-					| self.ppu_registers.stat_flags.flag_bits()
-					| ((match (self.ppu_registers.lcdc >> 7) == 1 {
-						true => self.ppu_registers.ly == self.ppu_registers.lyc,
-						false => self.ppu_registers.ly_lyc,
-					} as u8) << 2) | self.ppu_registers.mode.mode_flag()
-			));
-			ui.label(format!("SCY: {:02X}", self.ppu_registers.scy));
-			ui.label(format!("SCX: {:02X}", self.ppu_registers.scx));
-			ui.label(format!("LY: {:02X}", self.ppu_registers.ly));
-			ui.label(format!("LYC: {:02X}", self.ppu_registers.lyc));
-			ui.label(format!("WY: {:02X}", self.ppu_registers.wy));
-			ui.label(format!("WX: {:02X}", self.ppu_registers.wx));
+		egui::Window::new("PPU State").open(&mut self.state.ppu_register_window_open).show(
+			ctx,
+			|ui| {
+				ui.label(format!("Mode: {:?}", self.ppu_registers.mode));
+				ui.label(format!("LCDC: {:02X}", self.ppu_registers.lcdc));
+				ui.label(format!(
+					"Stat: {:02X}",
+					(1 << 7)
+						| self.ppu_registers.stat_flags.flag_bits()
+						| ((match (self.ppu_registers.lcdc >> 7) == 1 {
+							true => self.ppu_registers.ly == self.ppu_registers.lyc,
+							false => self.ppu_registers.ly_lyc,
+						} as u8) << 2) | self.ppu_registers.mode.mode_flag()
+				));
+				ui.label(format!("SCY: {:02X}", self.ppu_registers.scy));
+				ui.label(format!("SCX: {:02X}", self.ppu_registers.scx));
+				ui.label(format!("LY: {:02X}", self.ppu_registers.ly));
+				ui.label(format!("LYC: {:02X}", self.ppu_registers.lyc));
+				ui.label(format!("WY: {:02X}", self.ppu_registers.wy));
+				ui.label(format!("WX: {:02X}", self.ppu_registers.wx));
+			},
+		);
+
+		egui::Window::new("WRAM").vscroll(true).open(&mut self.state.wram_window_open).show(ctx, |ui| {
+			egui::Grid::new("memory_ov_wram").show(ui, |ui| {
+				ui.monospace("      00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F");
+				for mem_row_idx in 0xC00..(0xE00) {
+					let row_base = (mem_row_idx * 0x10) - 0xC000;
+					ui.end_row();
+					ui.monospace(format!("{:X}: {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}", mem_row_idx * 0x10, self.wram[row_base + 0], self.wram[row_base + 1], self.wram[row_base + 2], self.wram[row_base + 3], self.wram[row_base + 4], self.wram[row_base + 5], self.wram[row_base + 6], self.wram[row_base + 7], self.wram[row_base + 8], self.wram[row_base + 9], self.wram[row_base + 10], self.wram[row_base + 11], self.wram[row_base + 12], self.wram[row_base + 13], self.wram[row_base + 14], self.wram[row_base + 15]));
+				}
+			});
+		});
+
+		egui::Window::new("HRAM").vscroll(true).open(&mut self.state.hram_window_open).show(ctx, |ui| {
+			egui::Grid::new("memory_ov_hram").show(ui, |ui| {
+				ui.label("ROW: 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F");
+				for mem_row_idx in 0x0..0xA {
+					let row_base = mem_row_idx * 0x10;
+					ui.end_row();
+					ui.monospace(format!("{:X}: {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}", 0xFF80 + row_base, self.hram[row_base + 0], self.hram[row_base + 1], self.hram[row_base + 2], self.hram[row_base + 3], self.hram[row_base + 4], self.hram[row_base + 5], self.hram[row_base + 6], self.hram[row_base + 7], self.hram[row_base + 8], self.hram[row_base + 9], self.hram[row_base + 10], self.hram[row_base + 11], self.hram[row_base + 12], self.hram[row_base + 13], self.hram[row_base + 14], self.hram[row_base + 15]));
+				}
+
+				let row_base = 0xA0;
+				ui.end_row();
+				ui.monospace(format!("FFF0: {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} ??", self.hram[row_base + 0], self.hram[row_base + 1], self.hram[row_base + 2], self.hram[row_base + 3], self.hram[row_base + 4], self.hram[row_base + 5], self.hram[row_base + 6], self.hram[row_base + 7], self.hram[row_base + 8], self.hram[row_base + 9], self.hram[row_base + 10], self.hram[row_base + 11], self.hram[row_base + 12], self.hram[row_base + 13], self.hram[row_base + 14]));
+			});
+		});
+
+		egui::Window::new("OAM").vscroll(true).open(&mut self.state.oam_window_open).show(ctx, |ui| {
+			egui::Grid::new("memory_ov_oam").show(ui, |ui| {
+				ui.label("ROW: 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F");
+				for mem_row_idx in 0xC00..(0xC0A) {
+					let row_base = (mem_row_idx * 0x10) - 0xC000;
+					ui.end_row();
+					ui.label(format!("{:X}: {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}", mem_row_idx * 0x10, self.hram[row_base + 0], self.hram[row_base + 1], self.hram[row_base + 2], self.hram[row_base + 3], self.hram[row_base + 4], self.hram[row_base + 5], self.hram[row_base + 6], self.hram[row_base + 7], self.hram[row_base + 8], self.hram[row_base + 9], self.hram[row_base + 10], self.hram[row_base + 11], self.hram[row_base + 12], self.hram[row_base + 13], self.hram[row_base + 14], self.hram[row_base + 15]));
+				}
+
+				let row_base = 0xA0;
+				ui.end_row();
+				ui.label(format!("CF00: {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} ??", self.hram[row_base + 0], self.hram[row_base + 1], self.hram[row_base + 2], self.hram[row_base + 3], self.hram[row_base + 4], self.hram[row_base + 5], self.hram[row_base + 6], self.hram[row_base + 7], self.hram[row_base + 8], self.hram[row_base + 9], self.hram[row_base + 10], self.hram[row_base + 11], self.hram[row_base + 12], self.hram[row_base + 13], self.hram[row_base + 14]));
+			});
 		});
 	}
 }

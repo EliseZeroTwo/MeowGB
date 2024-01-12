@@ -24,6 +24,8 @@ use self::{
 	serial::{Serial, SerialWriter},
 	sound::Sound,
 };
+#[cfg(feature = "instr-dbg")]
+use crate::ringbuffer::RingBuffer;
 
 pub struct Gameboy<S: SerialWriter> {
 	pub ppu: Ppu,
@@ -43,6 +45,12 @@ pub struct Gameboy<S: SerialWriter> {
 	pub stop: bool,
 
 	pub tick_count: u8,
+
+	pub last_read: Option<(u16, u8)>,
+	pub last_write: Option<(u16, u8)>,
+
+	#[cfg(feature = "instr-dbg")]
+	pub pc_history: RingBuffer<u16, 0x1000>,
 }
 
 impl<S: SerialWriter> Gameboy<S> {
@@ -66,6 +74,10 @@ impl<S: SerialWriter> Gameboy<S> {
 			used_halt_bug: false,
 			stop: false,
 			tick_count: 0,
+			last_read: None,
+			last_write: None,
+			#[cfg(feature = "instr-dbg")]
+			pc_history: RingBuffer::new(),
 		}
 	}
 
@@ -221,10 +233,7 @@ impl<S: SerialWriter> Gameboy<S> {
 			}
 			0xFF41 => self.ppu.set_stat(&mut self.interrupts, value),
 			0xFF42 => self.ppu.registers.scy = value,
-			0xFF43 => {
-				// println!("Setting SCX to {} from {}", value, self.ppu.registers.scx);
-				self.ppu.registers.scx = value;
-			},
+			0xFF43 => self.ppu.registers.scx = value,
 			0xFF44 => {} // LY is read only
 			0xFF45 => self.ppu.set_lyc(&mut self.interrupts, value),
 			0xFF46 => self.dma.init_request(value),
@@ -312,6 +321,10 @@ impl<S: SerialWriter> Gameboy<S> {
 	}
 
 	pub fn cpu_read_u8(&mut self, address: u16) {
+		self.cpu_read_u8_internal(address, false);
+	}
+
+	pub fn cpu_read_u8_internal(&mut self, address: u16, is_next_pc: bool) {
 		assert!(!self.registers.mem_op_happened);
 		assert!(self.registers.mem_read_hold.is_none());
 		self.registers.mem_op_happened = true;
@@ -342,12 +355,16 @@ impl<S: SerialWriter> Gameboy<S> {
 				0xFFFF => self.interrupts.interrupt_enable,
 			},
 		};
+		if !is_next_pc {
+			self.last_read = Some((address, value));
+		}
 		self.registers.mem_read_hold = Some(value);
 	}
 
 	pub fn cpu_write_u8(&mut self, address: u16, value: u8) {
 		assert!(!self.registers.mem_op_happened);
 		self.registers.mem_op_happened = true;
+		self.last_write = Some((address, value));
 
 		match self.ppu.dma_occuring {
 			true => match address {

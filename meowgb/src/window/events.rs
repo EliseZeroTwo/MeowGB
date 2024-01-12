@@ -12,8 +12,15 @@ pub enum EmulatorWindowEvent {
 	DownToggle,
 	LeftToggle,
 	RightToggle,
-	PauseToggle,
+	Debug(EmulatorDebugEvent),
 	Exit,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum EmulatorDebugEvent {
+	Step,
+	Continue,
+	ToggleBreakpoint(u16, [bool; 3]),
 }
 
 #[derive(Debug)]

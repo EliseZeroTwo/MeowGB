@@ -1,4 +1,5 @@
 pub mod events;
+#[cfg(feature = "debugger")]
 mod overlay;
 
 use std::sync::{
@@ -6,7 +7,10 @@ use std::sync::{
 	Arc, RwLock,
 };
 
-use meowgb_core::gameboy::{serial::SerialWriter, Gameboy};
+use events::{EmulatorWindowEvent, GameboyEvent, Keymap};
+use meowgb_core::gameboy::serial::SerialWriter;
+#[cfg(feature = "debugger")]
+use overlay::Framework;
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
 	event::Event,
@@ -15,11 +19,7 @@ use winit::{
 };
 use winit_input_helper::WinitInputHelper;
 
-use self::{
-	events::{EmulatorWindowEvent, GameboyEvent, Keymap},
-	overlay::Framework,
-};
-use crate::config::MeowGBConfig;
+use crate::{config::MeowGBConfig, WrappedGameboy};
 
 macro_rules! define_keypress {
 	($input:ident, $config:ident, $keymap:ident, $tx:ident, $key:ident, $event:ident) => {
@@ -42,10 +42,13 @@ macro_rules! define_keypress {
 pub fn run_window(
 	rom_name: &str,
 	config: MeowGBConfig,
-	gameboy: Arc<RwLock<Gameboy<impl SerialWriter + 'static>>>,
+	gameboy: Arc<RwLock<WrappedGameboy<impl SerialWriter + 'static>>>,
 	rx: Receiver<GameboyEvent>,
 	tx: Sender<EmulatorWindowEvent>,
 ) {
+	#[cfg(not(feature = "debugger"))]
+	drop(gameboy);
+
 	let event_loop = EventLoop::new();
 	let mut input = WinitInputHelper::new();
 
@@ -53,26 +56,27 @@ pub fn run_window(
 		WindowBuilder::new().with_title(format!("Meow - {}", rom_name)).build(&event_loop).unwrap()
 	};
 
-	let (mut pixels, mut framework) = {
-		let window_size = window.inner_size();
-		let scale_factor = window.scale_factor() as f32;
-		let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-		let pixels = Pixels::new(
-			meowgb_core::gameboy::ppu::FB_WIDTH,
-			meowgb_core::gameboy::ppu::FB_HEIGHT,
-			surface_texture,
-		)
-		.unwrap();
-		let framework = Framework::new(
-			&event_loop,
-			window_size.width,
-			window_size.height,
-			scale_factor,
-			&pixels,
-			&gameboy.read().unwrap(),
-		);
-		(pixels, framework)
-	};
+	let window_size = window.inner_size();
+	#[cfg(feature = "debugger")]
+	let scale_factor = window.scale_factor() as f32;
+	let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+	let mut pixels = Pixels::new(
+		meowgb_core::gameboy::ppu::FB_WIDTH,
+		meowgb_core::gameboy::ppu::FB_HEIGHT,
+		surface_texture,
+	)
+	.unwrap();
+
+	#[cfg(feature = "debugger")]
+	let mut framework = Framework::new(
+		&event_loop,
+		window_size.width,
+		window_size.height,
+		scale_factor,
+		&pixels,
+		&gameboy.read().unwrap(),
+		tx.clone(),
+	);
 
 	let mut redraw_happened = true;
 	let mut fb: Option<Vec<u8>> = None;
@@ -87,19 +91,34 @@ pub fn run_window(
 				return;
 			}
 
-			if input.key_pressed(config.bindings.pause) {
-				tx.send(EmulatorWindowEvent::PauseToggle).unwrap();
-			}
-
+			// if input.key_pressed(config.bindings.pause) {
+			// 	tx.send(EmulatorWindowEvent::PauseToggle).unwrap();
+			// }
+			#[cfg(feature = "debugger")]
 			if let Some(debug_menu) = config.bindings.debug_menu {
 				if input.key_pressed(debug_menu) {
-					framework.gui.window_open = !framework.gui.window_open;
+					if !framework.gui.state.any_open() {
+						if let Some(old_state) = framework.gui.state_restore.take() {
+							framework.gui.state = old_state;
+						}
+						framework.gui.state.window_open = true;
+					} else {
+						framework.gui.state_restore = Some(framework.gui.state);
+						framework.gui.state.close_all();
+					}
+					redraw_happened = true;
 				}
 			}
 			if input.key_pressed(config.bindings.pause) {}
 
+			#[cfg(feature = "debugger")]
 			if let Some(scale_factor) = input.scale_factor() {
 				framework.scale_factor(scale_factor);
+				redraw_happened = true;
+			}
+			#[cfg(not(feature = "debugger"))]
+			{
+				redraw_happened |= input.scale_factor().is_some();
 			}
 
 			define_keypress!(input, config, keymap, tx, a, AToggle);
@@ -113,8 +132,9 @@ pub fn run_window(
 		}
 
 		match event {
+			#[cfg(feature = "debugger")]
 			Event::WindowEvent { event, .. } => {
-				framework.handle_event(&event);
+				redraw_happened |= framework.handle_event(&event);
 			}
 			Event::RedrawRequested(_) => {
 				let frame = pixels.frame_mut();
@@ -130,12 +150,14 @@ pub fn run_window(
 					}
 				}
 
+				#[cfg(feature = "debugger")]
 				framework.prepare(&window, &gameboy.read().unwrap());
 
 				let render_result = pixels.render_with(|encoder, render_target, context| {
 					// Render the world texture
 					context.scaling_renderer.render(encoder, render_target);
 
+					#[cfg(feature = "debugger")]
 					// Render egui
 					framework.render(encoder, render_target, context);
 
@@ -154,22 +176,23 @@ pub fn run_window(
 
 		if let Some(size) = input.window_resized() {
 			pixels.resize_surface(size.width, size.height).unwrap();
+			#[cfg(feature = "debugger")]
 			framework.resize(size.width, size.height);
-			window.request_redraw();
-			redraw_happened = false;
+			redraw_happened = true;
 		}
 
 		while let Ok(event) = rx.try_recv() {
 			match event {
 				GameboyEvent::Framebuffer(buf) => {
 					fb = Some(buf);
-
-					if redraw_happened {
-						window.request_redraw();
-						redraw_happened = false;
-					}
+					redraw_happened = true;
 				}
 			}
+		}
+
+		if redraw_happened {
+			window.request_redraw();
+			redraw_happened = false;
 		}
 	});
 }

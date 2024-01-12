@@ -550,8 +550,10 @@ impl Ppu {
 	}
 
 	fn set_scanline(&mut self, interrupts: &mut Interrupts, scanline: u8) {
-		// println!("LY incrementing: {} cycles since last incrementation. cycles since: {:?}", self.registers.cycles_since_last_ly_increment, self.registers.cycles_since_last_last_mode_start_increment.iter().enumerate().map(|(idx, value)| {
-		// 		let idx_enum = match idx {
+		// println!("LY incrementing: {} cycles since last incrementation. cycles since:
+		// {:?}", self.registers.cycles_since_last_ly_increment,
+		// self.registers.cycles_since_last_last_mode_start_increment.iter().
+		// enumerate().map(|(idx, value)| { 		let idx_enum = match idx {
 		// 			0 => PPUMode::HBlank,
 		// 			1 => PPUMode::VBlank,
 		// 			2 => PPUMode::SearchingOAM,
@@ -638,7 +640,6 @@ impl Ppu {
 					self.total_dots += 1;
 
 					if self.current_dot == self.dot_target {
-						// println!("Mode 3 DT: {}", self.dot_target);
 						// assert_eq!(self.total_dots, match self.first_frame && self.first_line {
 						//     true => self.dot_target,
 						//     false => 80 + self.dot_target
@@ -659,15 +660,14 @@ impl Ppu {
 					if self.first_line && self.current_dot == 80 && self.dot_target == 0 {
 						self.set_mode(interrupts, PPUMode::TransferringData);
 					} else if self.dot_target != 0 && self.current_dot == self.dot_target {
-						// println!("Mode 0 DT: {}", self.dot_target);
 						self.set_scanline(interrupts, self.registers.ly + 1);
 
 						assert_eq!(
 							self.total_dots,
-							456 // match self.first_frame && self.first_line {
-							// 	true => 456 - (80 - 64),
-							// 	false => 456,
-							// }
+							456 /* match self.first_frame && self.first_line {
+							     * 	true => 456 - (80 - 64),
+							     * 	false => 456,
+							     * } */
 						);
 						self.total_dots = 0;
 						self.first_line = false;
@@ -729,10 +729,8 @@ impl Ppu {
 			Some(state) => state,
 			None => {
 				let scrolling_delay = self.registers.scx % 8;
-				// println!("{}", scrolling_delay);
 				self.dot_target += scrolling_delay as u16;
 				if scrolling_delay != 0 {
-					// println!("Scrolling delay of {:#X} with scx of {}", scrolling_delay, self.registers.scx);
 					LineDrawingState::BackgroundScrolling(
 						scrolling_delay as usize,
 						self.registers.scx,

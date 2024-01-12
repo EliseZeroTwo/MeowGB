@@ -46,6 +46,10 @@ jobs:
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/daa.gb test -m 100000000 -s meowgb-tests/expected_output/daa.bin
 
+      - name: Run test ROM (mooneye-test-suite di_timing-GS)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/di_timing-GS.gb test -m 100000000 -s meowgb-tests/expected_output/di_timing-GS.bin
+
       - name: Run test ROM (mooneye-test-suite div_timing)
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/div_timing.gb test -m 100000000 -s meowgb-tests/expected_output/div_timing.bin
@@ -65,6 +69,18 @@ jobs:
       - name: Run test ROM (mooneye-test-suite halt_ime0_ei)
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/halt_ime0_ei.gb test -m 100000000 -s meowgb-tests/expected_output/halt_ime0_ei.bin
+
+      - name: Run test ROM (mooneye-test-suite halt_ime0_nointr_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/halt_ime0_nointr_timing.gb test -m 100000000 -s meowgb-tests/expected_output/halt_ime0_nointr_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite halt_ime1_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/halt_ime1_timing.gb test -m 100000000 -s meowgb-tests/expected_output/halt_ime1_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite halt_ime1_timing2-GS)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/halt_ime1_timing2-GS.gb test -m 100000000 -s meowgb-tests/expected_output/halt_ime1_timing2-GS.bin
 
       - name: Run test ROM (mooneye-test-suite intr_1_2_timing-GS)
         if: always()
@@ -90,6 +106,14 @@ jobs:
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/oam_dma_timing.gb test -m 100000000 -s meowgb-tests/expected_output/oam_dma_timing.bin
 
+      - name: Run test ROM (mooneye-test-suite pop_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/pop_timing.gb test -m 100000000 -s meowgb-tests/expected_output/pop_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite push_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/push_timing.gb test -m 100000000 -s meowgb-tests/expected_output/push_timing.bin
+
       - name: Run test ROM (mooneye-test-suite rapid_di_ei)
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/rapid_di_ei.gb test -m 100000000 -s meowgb-tests/expected_output/rapid_di_ei.bin
@@ -105,6 +129,10 @@ jobs:
       - name: Run test ROM (mooneye-test-suite reg_read)
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/reg_read.gb test -m 100000000 -s meowgb-tests/expected_output/reg_read.bin
+
+      - name: Run test ROM (mooneye-test-suite rst_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/rst_timing.gb test -m 100000000 -s meowgb-tests/expected_output/rst_timing.bin
 
       - name: Run test ROM (mooneye-test-suite stat_irq_blocking)
         if: always()
