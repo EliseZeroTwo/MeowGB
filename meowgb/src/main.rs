@@ -193,8 +193,6 @@ pub fn run_gameboy(
 			gameboy.debugging |= bp_triggered;
 
 			if bp_triggered || step {
-				gameboy.debugging = bp_triggered;
-
 				let now = time::OffsetDateTime::now_utc();
 
 				if let Some(debugging_tbf) = debugging_tbf {

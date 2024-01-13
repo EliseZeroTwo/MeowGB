@@ -1,4 +1,4 @@
-use super::interrupts::Interrupts;
+use super::{interrupts::Interrupts, dma::DmaState};
 
 pub const FB_HEIGHT: u32 = 144;
 pub const FB_WIDTH: u32 = 160;
@@ -298,8 +298,6 @@ pub struct Ppu {
 	sprite_buffer: [Option<OAMEntry>; 10],
 	sprite_count: usize,
 
-	pub dma_occuring: bool,
-
 	current_draw_state: Option<LineDrawingState>,
 	wy_match: bool,
 
@@ -355,7 +353,6 @@ impl Ppu {
 			dot_target: 0,
 			sprite_buffer: [None; 10],
 			sprite_count: 0,
-			dma_occuring: false,
 			current_draw_state: None,
 			wy_match: false,
 			first_frame: true,
@@ -452,15 +449,14 @@ impl Ppu {
 		((high & 0b1) << 1) | low & 0b1
 	}
 
-	fn internal_read_oam(&mut self, offset: usize) -> u8 {
-		match self.dma_occuring && !OVERRIDE_PPU_MEMORY_ACCESS {
+	fn internal_read_oam(&mut self, dma_state: &DmaState, offset: usize) -> u8 {
+		match dma_state.in_progress().is_some() && !OVERRIDE_PPU_MEMORY_ACCESS {
 			true => 0xFF,
 			false => self.oam[offset as usize],
 		}
 	}
 
 	pub fn dma_write_oam(&mut self, offset: u8, value: u8) {
-		assert!(self.dma_occuring);
 		self.oam[offset as usize] = value;
 	}
 
@@ -569,7 +565,7 @@ impl Ppu {
 		self.registers.ly_lyc = self.registers.ly == self.registers.lyc;
 	}
 
-	pub fn tick(&mut self, interrupts: &mut Interrupts) -> bool {
+	pub fn tick(&mut self, dma_state: &DmaState, interrupts: &mut Interrupts) -> bool {
 		if self.enabled() {
 			self.registers.cycles_since_last_ly_increment += 1;
 			match self.mode() {
@@ -587,10 +583,10 @@ impl Ppu {
 						let oam_item_idx: usize = (self.current_dot as usize / 2) * 4;
 
 						let oam_entry = OAMEntry::parse([
-							self.internal_read_oam(oam_item_idx),
-							self.internal_read_oam(oam_item_idx + 1),
-							self.internal_read_oam(oam_item_idx + 2),
-							self.internal_read_oam(oam_item_idx + 3),
+							self.internal_read_oam(dma_state, oam_item_idx),
+							self.internal_read_oam(dma_state, oam_item_idx + 1),
+							self.internal_read_oam(dma_state, oam_item_idx + 2),
+							self.internal_read_oam(dma_state, oam_item_idx + 3),
 						]);
 
 						let sprite_height = self.sprite_height();

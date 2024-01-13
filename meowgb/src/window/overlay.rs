@@ -1,6 +1,6 @@
 /// Provides an [egui] based overlay for debugigng the emulator whilst it is
 /// running
-use egui::{ClippedPrimitive, Context, Grid, TexturesDelta};
+use egui::{ClippedPrimitive, Context, Grid, TexturesDelta, RichText, Color32};
 use egui_wgpu::renderer::{Renderer, ScreenDescriptor};
 use meowgb_core::gameboy::serial::SerialWriter;
 use pixels::{wgpu, PixelsContext};
@@ -28,6 +28,7 @@ pub struct GuiWindowState {
 	pub wram_window_open: bool,
 	pub oam_window_open: bool,
 	pub hram_window_open: bool,
+	pub dma_window_open: bool,
 }
 
 impl GuiWindowState {
@@ -39,6 +40,7 @@ impl GuiWindowState {
 		self.wram_window_open = false;
 		self.oam_window_open = false;
 		self.hram_window_open = false;
+		self.dma_window_open = false;
 	}
 
 	pub fn any_open(&self) -> bool {
@@ -49,6 +51,7 @@ impl GuiWindowState {
 			|| self.wram_window_open
 			|| self.oam_window_open
 			|| self.hram_window_open
+			|| self.dma_window_open
 	}
 }
 
@@ -68,6 +71,7 @@ pub struct Gui {
 	pub is_debugging: bool,
 	pub breakpoints: [[bool; 3]; 0x10000],
 	pub sender: std::sync::mpsc::Sender<EmulatorWindowEvent>,
+	pub dma: meowgb_core::gameboy::dma::DmaState,
 }
 
 impl Framework {
@@ -124,6 +128,7 @@ impl Framework {
 		self.gui.oam = gameboy.gameboy.ppu.oam;
 		self.gui.hram = gameboy.gameboy.memory.hram;
 		self.gui.wram = gameboy.gameboy.memory.wram;
+		self.gui.dma = gameboy.gameboy.dma;
 
 		// Run the egui frame and create all paint jobs to prepare for rendering.
 		let raw_input = self.egui_state.take_egui_input(window);
@@ -189,6 +194,7 @@ impl Gui {
 				wram_window_open: false,
 				oam_window_open: false,
 				hram_window_open: false,
+    			dma_window_open: false,
 			},
 			state_restore: None,
 			registers: gameboy.gameboy.registers,
@@ -203,6 +209,7 @@ impl Gui {
 			wram: gameboy.gameboy.memory.wram,
 			hram: gameboy.gameboy.memory.hram,
 			oam: gameboy.gameboy.ppu.oam,
+			dma: gameboy.gameboy.dma
 		}
 	}
 
@@ -234,6 +241,10 @@ impl Gui {
 
 			if ui.button("Toggle OAM Window").clicked() {
 				self.state.oam_window_open = !self.state.oam_window_open;
+			}
+			
+			if ui.button("Toggle DMA Window").clicked() {
+				self.state.dma_window_open = !self.state.dma_window_open;
 			}
 		});
 
@@ -334,6 +345,20 @@ impl Gui {
 					ui.monospace(format!("{:X}: {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}", mem_row_idx * 0x10, self.wram[row_base + 0], self.wram[row_base + 1], self.wram[row_base + 2], self.wram[row_base + 3], self.wram[row_base + 4], self.wram[row_base + 5], self.wram[row_base + 6], self.wram[row_base + 7], self.wram[row_base + 8], self.wram[row_base + 9], self.wram[row_base + 10], self.wram[row_base + 11], self.wram[row_base + 12], self.wram[row_base + 13], self.wram[row_base + 14], self.wram[row_base + 15]));
 				}
 			});
+		});
+
+		egui::Window::new("DMA").vscroll(true).open(&mut self.state.dma_window_open).show(ctx, |ui| {
+			if let Some(bus) = self.dma.in_progress() {
+				ui.heading(RichText::new(format!("Active ({:#?} Bus)", bus)).color(Color32::LIGHT_GREEN));
+			} else {
+				ui.heading(RichText::new("Inactive").color(Color32::LIGHT_RED));
+			}
+
+			let offset = (0xA0 - self.dma.remaining_cycles) as u16;
+			ui.label(format!("Read Address:  {:#04X}", ((self.dma.base as u16) << 8) | offset));
+			ui.label(format!("Write Address: {:#04X}", 0xFE00 | offset));
+			ui.label(format!("Base: {:#04X}", (self.dma.base as u16) << 8));
+			ui.label(format!("Remaining Bytes: {:#02X}", self.dma.remaining_cycles));
 		});
 
 		egui::Window::new("HRAM").vscroll(true).open(&mut self.state.hram_window_open).show(ctx, |ui| {

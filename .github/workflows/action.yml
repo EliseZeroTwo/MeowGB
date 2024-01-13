@@ -30,6 +30,10 @@ jobs:
         if: always()
         run: ./target/release/meowgb-tests test-roms/blargg/roms/mem_timing.gb test -m 100000000 -s meowgb-tests/expected_output/mem_timing.bin
 
+      - name: Run test ROM (mooneye-test-suite add_sp_e_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/add_sp_e_timing.gb test -m 100000000 -s meowgb-tests/expected_output/add_sp_e_timing.bin
+
       - name: Run test ROM (mooneye-test-suite basic)
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/basic.gb test -m 100000000 -s meowgb-tests/expected_output/basic.bin
@@ -41,6 +45,22 @@ jobs:
       - name: Run test ROM (mooneye-test-suite boot_regs-dmgABC)
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/boot_regs-dmgABC.gb test -m 100000000 -s meowgb-tests/expected_output/boot_regs-dmgABC.bin
+
+      - name: Run test ROM (mooneye-test-suite call_cc_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/call_cc_timing.gb test -m 100000000 -s meowgb-tests/expected_output/call_cc_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite call_cc_timing2)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/call_cc_timing2.gb test -m 100000000 -s meowgb-tests/expected_output/call_cc_timing2.bin
+
+      - name: Run test ROM (mooneye-test-suite call_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/call_timing.gb test -m 100000000 -s meowgb-tests/expected_output/call_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite call_timing2)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/call_timing2.gb test -m 100000000 -s meowgb-tests/expected_output/call_timing2.bin
 
       - name: Run test ROM (mooneye-test-suite daa)
         if: always()

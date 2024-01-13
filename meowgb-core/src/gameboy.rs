@@ -106,7 +106,7 @@ impl<S: SerialWriter> Gameboy<S> {
 	pub fn tick(&mut self) -> bool {
 		if self.tick_count == 0 {
 			cpu::tick_cpu(self);
-			let redraw_requested = self.ppu.tick(&mut self.interrupts);
+			let redraw_requested = self.ppu.tick(&self.dma, &mut self.interrupts);
 			self.dma.tick_dma(&mut self.ppu, &self.memory, self.cartridge.as_deref());
 			self.serial.tick(&mut self.interrupts);
 			self.timer.tick(&mut self.interrupts);
@@ -114,7 +114,7 @@ impl<S: SerialWriter> Gameboy<S> {
 			self.tick_count += 1;
 			redraw_requested
 		} else {
-			let redraw_requested = self.ppu.tick(&mut self.interrupts);
+			let redraw_requested = self.ppu.tick(&self.dma, &mut self.interrupts);
 			self.timer.tick(&mut self.interrupts);
 			self.tick_count += 1;
 			self.tick_count %= 4;
@@ -328,7 +328,7 @@ impl<S: SerialWriter> Gameboy<S> {
 		assert!(!self.registers.mem_op_happened);
 		assert!(self.registers.mem_read_hold.is_none());
 		self.registers.mem_op_happened = true;
-		let value = match self.ppu.dma_occuring {
+		let value = match self.dma.is_conflict(address) {
 			true => match address {
 				0..=0xFEFF => 0xFF,
 				0xFF00..=0xFF7F => self.cpu_read_io(address),
@@ -366,7 +366,7 @@ impl<S: SerialWriter> Gameboy<S> {
 		self.registers.mem_op_happened = true;
 		self.last_write = Some((address, value));
 
-		match self.ppu.dma_occuring {
+		match self.dma.is_conflict(address) {
 			true => match address {
 				0..=0xFEFF => {}
 				0xFF00..=0xFF7F => self.cpu_write_io(address, value),

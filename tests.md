@@ -8,9 +8,14 @@
 
 ## Mooneye Test Suite
 
+* add_sp_e_timing.gb - [ROM](./test-roms/mooneye-test-suite/roms/add_sp_e_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/add_sp_e_timing.bin)
 * basic.gb - [ROM](./test-roms/mooneye-test-suite/roms/basic.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/basic.bin)
 * boot_hwio-dmgABCmgb.gb - [ROM](./test-roms/mooneye-test-suite/roms/boot_hwio-dmgABCmgb.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/boot_hwio-dmgABCmgb.bin)
 * boot_regs-dmgABC.gb - [ROM](./test-roms/mooneye-test-suite/roms/boot_regs-dmgABC.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/boot_regs-dmgABC.bin)
+* call_cc_timing.gb - [ROM](./test-roms/mooneye-test-suite/roms/call_cc_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/call_cc_timing.bin)
+* call_cc_timing2.gb - [ROM](./test-roms/mooneye-test-suite/roms/call_cc_timing2.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/call_cc_timing2.bin)
+* call_timing.gb - [ROM](./test-roms/mooneye-test-suite/roms/call_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/call_timing.bin)
+* call_timing2.gb - [ROM](./test-roms/mooneye-test-suite/roms/call_timing2.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/call_timing2.bin)
 * daa.gb - [ROM](./test-roms/mooneye-test-suite/roms/daa.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/daa.bin)
 * di_timing-GS.gb - [ROM](./test-roms/mooneye-test-suite/roms/di_timing-GS.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/di_timing-GS.bin)
 * div_timing.gb - [ROM](./test-roms/mooneye-test-suite/roms/div_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/div_timing.bin)

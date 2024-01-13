@@ -37,6 +37,16 @@ else
   echo "Failed: $res"
 fi
 
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/add_sp_e_timing.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/add_sp_e_timing.gb test -m 100000000 -s meowgb-tests/expected_output/add_sp_e_timing.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
 echo "Running test ROM ./test-roms/mooneye-test-suite/roms/basic.gb"
 
 TEST_TOTAL=$((TEST_TOTAL + 1))
@@ -62,6 +72,46 @@ echo "Running test ROM ./test-roms/mooneye-test-suite/roms/boot_regs-dmgABC.gb"
 TEST_TOTAL=$((TEST_TOTAL + 1))
 
 if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/boot_regs-dmgABC.gb test -m 100000000 -s meowgb-tests/expected_output/boot_regs-dmgABC.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/call_cc_timing.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/call_cc_timing.gb test -m 100000000 -s meowgb-tests/expected_output/call_cc_timing.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/call_cc_timing2.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/call_cc_timing2.gb test -m 100000000 -s meowgb-tests/expected_output/call_cc_timing2.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/call_timing.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/call_timing.gb test -m 100000000 -s meowgb-tests/expected_output/call_timing.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/roms/call_timing2.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/call_timing2.gb test -m 100000000 -s meowgb-tests/expected_output/call_timing2.bin 2>&1 > /dev/null) ; then
   TEST_SUCCESS=$((TEST_SUCCESS + 1))
 else
   echo "Failed: $res"
