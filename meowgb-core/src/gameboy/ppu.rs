@@ -1,4 +1,4 @@
-use super::{interrupts::Interrupts, dma::DmaState};
+use super::{dma::DmaState, interrupts::Interrupts};
 
 pub const FB_HEIGHT: u32 = 144;
 pub const FB_WIDTH: u32 = 160;

@@ -53,7 +53,7 @@ EOF
 for full_f in ./test-roms/blargg/roms/*.gb
 do
     f="${full_f##*/}"; f="${f%.*}";
-    TEST_CMD="./target/release/meowgb-tests test-roms/blargg/roms/$f.gb test -m 100000000 -s meowgb-tests/expected_output/$f.bin"
+    TEST_CMD="./target/release/meowgb-tests test-roms/blargg/roms/$f.gb test -m 100000000 -s meowgb-tests/expected_output/blargg/$f.bin"
 
     cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF
 
@@ -69,7 +69,7 @@ fi
 EOF
 
     cat >>$TEST_MD_FILE << EOF
-* $f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/$f.bin)
+* $f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/blargg/$f.bin)
 EOF
 
     tee -a $GH_ACTION_OUTPUT_FILE $FJ_ACTION_OUTPUT_FILE >/dev/null << EOF
@@ -89,7 +89,7 @@ EOF
 for full_f in ./test-roms/mooneye-test-suite/roms/*.gb
 do
     f="${full_f##*/}"; f="${f%.*}";
-      TEST_CMD="./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/$f.gb test -m 100000000 -s meowgb-tests/expected_output/$f.bin"
+      TEST_CMD="./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/$f.gb test -m 100000000 -s meowgb-tests/expected_output/mooneye-test-suite/$f.bin"
 
     cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF
 
@@ -105,7 +105,7 @@ fi
 EOF
 
     cat >>$TEST_MD_FILE << EOF
-* $f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/MBC1/$f.bin)
+* $f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/mooneye-test-suite/$f.bin)
 EOF
 
     tee -a $GH_ACTION_OUTPUT_FILE $FJ_ACTION_OUTPUT_FILE >/dev/null << EOF
@@ -116,16 +116,20 @@ EOF
 EOF
 done
 
-cat >>$TEST_MD_FILE << EOF
+for directory in ./test-roms/mooneye-test-suite/roms/*/
+do
+  d=$(basename $directory)
 
-### MBC1
+  cat >>$TEST_MD_FILE << EOF
+
+### $d
 
 EOF
 
-for full_f in ./test-roms/mooneye-test-suite/roms/MBC1/**.gb
-do
+  for full_f in ./test-roms/mooneye-test-suite/roms/$d/*.gb
+  do
     f="${full_f##*/}"; f="${f%.*}";
-      TEST_CMD="./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/MBC1/$f.gb test -m 100000000 -s meowgb-tests/expected_output/MBC1/$f.bin"
+    TEST_CMD="./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/$d/$f.gb test -m 100000000 -s meowgb-tests/expected_output/mooneye-test-suite/$d/$f.bin"
 
     cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF
 
@@ -141,15 +145,17 @@ fi
 EOF
 
     cat >>$TEST_MD_FILE << EOF
-* $f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/$f.bin)
+* $d/$f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/mooneye-test-suite/$d/$f.bin)
 EOF
 
     tee -a $GH_ACTION_OUTPUT_FILE $FJ_ACTION_OUTPUT_FILE >/dev/null << EOF
 
-      - name: Run test ROM (mooneye-test-suite $f)
+      - name: Run test ROM (mooneye-test-suite $d/$f)
         if: always()
         run: $TEST_CMD
 EOF
+  done
+
 done
 
 cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF

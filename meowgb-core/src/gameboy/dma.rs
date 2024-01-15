@@ -10,10 +10,9 @@ pub enum DmaMemoryBus {
 impl DmaMemoryBus {
 	pub fn from_base(base: u8) -> Self {
 		match base {
-			0..=0x7F
-			| 0xA0..=0xFD => Self::External,
+			0..=0x7F | 0xA0..=0xFD => Self::External,
 			0x80..=0x9F => Self::Video,
-			_ => Self::Other
+			_ => Self::Other,
 		}
 	}
 
@@ -45,9 +44,7 @@ pub struct DmaState {
 
 impl DmaState {
 	pub fn is_conflict(&self, address: u16) -> bool {
-		self.in_progress().map(|bus| {
-			bus.conflict_in_range(address)
-		}).unwrap_or_default()
+		self.in_progress().map(|bus| bus.conflict_in_range(address)).unwrap_or_default()
 	}
 
 	pub fn in_progress(&self) -> Option<DmaMemoryBus> {
@@ -58,7 +55,13 @@ impl DmaState {
 	}
 
 	pub fn new() -> Self {
-		Self { dma_in_progress: false, original_base: 0, base: 0, remaining_cycles: 0, restarting: None }
+		Self {
+			dma_in_progress: false,
+			original_base: 0,
+			base: 0,
+			remaining_cycles: 0,
+			restarting: None,
+		}
 	}
 
 	pub fn init_request(&mut self, base: u8) {

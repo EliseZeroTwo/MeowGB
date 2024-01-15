@@ -1,6 +1,6 @@
 /// Provides an [egui] based overlay for debugigng the emulator whilst it is
 /// running
-use egui::{ClippedPrimitive, Context, Grid, TexturesDelta, RichText, Color32};
+use egui::{ClippedPrimitive, Color32, Context, Grid, RichText, TexturesDelta};
 use egui_wgpu::renderer::{Renderer, ScreenDescriptor};
 use meowgb_core::gameboy::serial::SerialWriter;
 use pixels::{wgpu, PixelsContext};
@@ -194,7 +194,7 @@ impl Gui {
 				wram_window_open: false,
 				oam_window_open: false,
 				hram_window_open: false,
-    			dma_window_open: false,
+				dma_window_open: false,
 			},
 			state_restore: None,
 			registers: gameboy.gameboy.registers,
@@ -209,7 +209,7 @@ impl Gui {
 			wram: gameboy.gameboy.memory.wram,
 			hram: gameboy.gameboy.memory.hram,
 			oam: gameboy.gameboy.ppu.oam,
-			dma: gameboy.gameboy.dma
+			dma: gameboy.gameboy.dma,
 		}
 	}
 
@@ -242,7 +242,7 @@ impl Gui {
 			if ui.button("Toggle OAM Window").clicked() {
 				self.state.oam_window_open = !self.state.oam_window_open;
 			}
-			
+
 			if ui.button("Toggle DMA Window").clicked() {
 				self.state.dma_window_open = !self.state.dma_window_open;
 			}
@@ -347,19 +347,25 @@ impl Gui {
 			});
 		});
 
-		egui::Window::new("DMA").vscroll(true).open(&mut self.state.dma_window_open).show(ctx, |ui| {
-			if let Some(bus) = self.dma.in_progress() {
-				ui.heading(RichText::new(format!("Active ({:#?} Bus)", bus)).color(Color32::LIGHT_GREEN));
-			} else {
-				ui.heading(RichText::new("Inactive").color(Color32::LIGHT_RED));
-			}
+		egui::Window::new("DMA").vscroll(true).open(&mut self.state.dma_window_open).show(
+			ctx,
+			|ui| {
+				if let Some(bus) = self.dma.in_progress() {
+					ui.heading(
+						RichText::new(format!("Active ({:#?} Bus)", bus))
+							.color(Color32::LIGHT_GREEN),
+					);
+				} else {
+					ui.heading(RichText::new("Inactive").color(Color32::LIGHT_RED));
+				}
 
-			let offset = (0xA0 - self.dma.remaining_cycles) as u16;
-			ui.label(format!("Read Address:  {:#04X}", ((self.dma.base as u16) << 8) | offset));
-			ui.label(format!("Write Address: {:#04X}", 0xFE00 | offset));
-			ui.label(format!("Base: {:#04X}", (self.dma.base as u16) << 8));
-			ui.label(format!("Remaining Bytes: {:#02X}", self.dma.remaining_cycles));
-		});
+				let offset = (0xA0 - self.dma.remaining_cycles) as u16;
+				ui.label(format!("Read Address:  {:#04X}", ((self.dma.base as u16) << 8) | offset));
+				ui.label(format!("Write Address: {:#04X}", 0xFE00 | offset));
+				ui.label(format!("Base: {:#04X}", (self.dma.base as u16) << 8));
+				ui.label(format!("Remaining Bytes: {:#02X}", self.dma.remaining_cycles));
+			},
+		);
 
 		egui::Window::new("HRAM").vscroll(true).open(&mut self.state.hram_window_open).show(ctx, |ui| {
 			egui::Grid::new("memory_ov_hram").show(ui, |ui| {
