@@ -268,7 +268,7 @@ pub fn tick_cpu(state: &mut Gameboy<impl SerialWriter>) {
 			0x0d => alu::dec_c,
 			0x0e => load_store_move::ld_c_imm_u8,
 			0x0F => alu::rrca,
-			0x10 => misc::halt,
+			0x10 => misc::stop,
 			0x11 => load_store_move::ld_de_imm_u16,
 			0x12 => load_store_move::ld_deref_de_a,
 			0x13 => alu::inc_de,
