@@ -95,20 +95,17 @@ impl Registers {
 	define_register!(d, e);
 	define_register!(h, l);
 
-	pub fn post_rom() -> Self {
-		Self {
-			a: 0x01,
-			f: 0xB0,
-			b: 0x00,
-			c: 0x13,
-			d: 0x00,
-			e: 0xD8,
-			h: 0x01,
-			l: 0x4D,
-			sp: 0xFFFE,
-			pc: 0x0100,
-			..Default::default()
-		}
+	pub fn set_post_rom(&mut self) {
+		self.a = 0x01;
+		self.f = 0xB0;
+		self.b = 0x00;
+		self.c = 0x13;
+		self.d = 0x00;
+		self.e = 0xD8;
+		self.h = 0x01;
+		self.l = 0x4D;
+		self.sp = 0xFFFE;
+		self.pc = 0x0100;
 	}
 
 	/// This is just a helper function for macros utilizing ident pasting

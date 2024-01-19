@@ -18,7 +18,15 @@ pub struct CliArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum Operation {
-	Test {
+	TestFramebuffer {
+		/// maximum M-cycles
+		#[clap(short = 'm', long)]
+		maximum_m_cycles: u64,
+		/// path to expected framebuffer (RGBA)
+		#[clap(short = 's', long)]
+		expected_framebuffer: PathBuf,
+	},
+	TestSerial {
 		/// maximum M-cycles
 		#[clap(short = 'm', long)]
 		maximum_m_cycles: u64,
@@ -26,13 +34,21 @@ pub enum Operation {
 		#[clap(short = 's', long)]
 		expected_serial: PathBuf,
 	},
-	GenerateOutput {
+	GenerateOutputSerial {
 		/// M-cycles to run for
 		#[clap(short = 'm', long)]
 		m_cycles: u64,
 		/// path to expected serial output
 		#[clap(short = 's', long)]
 		expected_serial: PathBuf,
+	},
+	GenerateOutputFramebuffer {
+		/// M-cycles to run for
+		#[clap(short = 'm', long)]
+		m_cycles: u64,
+		/// path to expected framebuffer output
+		#[clap(short = 's', long)]
+		expected_framebuffer: PathBuf,
 	},
 }
 
@@ -42,14 +58,16 @@ pub enum DmgTestError {
 	RomNotFound,
 	#[error("ROM reading error: {0}")]
 	RomRead(std::io::Error),
-	#[error("Missing serial output file")]
-	SerialOutputFileNotFound,
-	#[error("Error reading serial output file: {0}")]
-	SerialOutputFileRead(std::io::Error),
-	#[error("Error writing serial output file: {0}")]
-	SerialOutputFileWrite(std::io::Error),
+	#[error("Missing output file")]
+	OutputFileNotFound,
+	#[error("Error reading output file: {0}")]
+	OutputFileRead(std::io::Error),
+	#[error("Error writing output file: {0}")]
+	OutputFileWrite(std::io::Error),
 	#[error("Serial mismatch\nExpected: {0}\nFound: {1}")]
 	SerialDifferent(String, String),
+	#[error("Framebuffer mismatch")]
+	FramebufferDifferent,
 }
 
 #[derive(Debug, Clone)]
@@ -75,10 +93,10 @@ impl SerialWriter for SyncWriter {
 	}
 }
 
-fn generate_output(
+fn generate_output<const FRAMEBUFFER: bool>(
 	rom: &Path,
 	m_cycles: u64,
-	expected_serial: &Path,
+	expected: &Path,
 ) -> Result<Duration, DmgTestError> {
 	let rom = {
 		if !rom.is_file() {
@@ -88,29 +106,39 @@ fn generate_output(
 	};
 
 	let sync_writer = SyncWriter::new();
+	let mut fb = None;
 
-	let mut gameboy = Gameboy::new(None, sync_writer.clone());
-	gameboy.load_cartridge(rom);
+	let mut gameboy = Gameboy::new(sync_writer.clone(), Some(rom));
 
 	let instant = std::time::Instant::now();
 
 	for _ in 0..m_cycles {
-		gameboy.tick_4();
+		let new_fb = gameboy.tick_4();
+
+		if FRAMEBUFFER && new_fb {
+			fb = Some(gameboy.ppu.write_fb());
+		}
 	}
 
 	drop(gameboy);
 
-	let serial_content = sync_writer.into_inner();
-	std::fs::write(expected_serial, &serial_content)
-		.map_err(DmgTestError::SerialOutputFileWrite)?;
+	if FRAMEBUFFER {
+		std::fs::write(expected, &fb.unwrap())
+			.map_err(DmgTestError::OutputFileWrite)?;
+	} else {
+		let serial_content = sync_writer.into_inner();
+		std::fs::write(expected, &serial_content)
+			.map_err(DmgTestError::OutputFileWrite)?;
+	}
 
 	Ok(instant.elapsed())
 }
 
-fn run_test(
+
+fn run_test<const FRAMEBUFFER: bool>(
 	rom: &Path,
 	maximum_m_cycles: u64,
-	expected_serial: &Path,
+	expected: &Path,
 ) -> Result<(u64, Duration), DmgTestError> {
 	let rom = {
 		if !rom.is_file() {
@@ -119,38 +147,51 @@ fn run_test(
 		std::fs::read(rom).map_err(DmgTestError::RomRead)?
 	};
 
-	let expected_serial = {
-		if !expected_serial.is_file() {
-			return Err(DmgTestError::SerialOutputFileNotFound);
+	let expected = {
+		if !expected.is_file() {
+			return Err(DmgTestError::OutputFileNotFound);
 		}
-		std::fs::read(expected_serial).map_err(DmgTestError::SerialOutputFileRead)?
+		std::fs::read(expected).map_err(DmgTestError::OutputFileRead)?
 	};
+
+	if FRAMEBUFFER {
+		assert_eq!(expected.len(), (meowgb_core::gameboy::ppu::FB_WIDTH as usize * meowgb_core::gameboy::ppu::FB_HEIGHT as usize) * meowgb_core::gameboy::ppu::PIXEL_SIZE as usize);
+	}
 
 	let sync_writer = SyncWriter::new();
 
-	let mut gameboy = Gameboy::new(None, sync_writer.clone());
-	gameboy.load_cartridge(rom);
+	let mut gameboy = Gameboy::new(sync_writer.clone(), Some(rom));
 
 	let instant = Instant::now();
 
 	let mut cycle_counter = 0;
 
 	while cycle_counter < maximum_m_cycles {
-		gameboy.tick_4();
+		if FRAMEBUFFER {
+			let redraw = gameboy.tick_4();
 
-		cycle_counter += 1;
+			cycle_counter += 1;
 
-		if sync_writer.compare(&expected_serial) {
-			return Ok((cycle_counter, instant.elapsed()));
+			if redraw && expected == gameboy.ppu.write_fb() {
+				return Ok((cycle_counter, instant.elapsed()));
+			}
+		} else {
+			gameboy.tick_4();
+
+			cycle_counter += 1;
+
+			if sync_writer.compare(&expected) {
+				return Ok((cycle_counter, instant.elapsed()));
+			}
 		}
 	}
 
 	drop(gameboy);
 
-	match sync_writer.compare(&expected_serial) {
+	match sync_writer.compare(&expected) {
 		true => Ok((cycle_counter, instant.elapsed())),
 		false => Err(DmgTestError::SerialDifferent(
-			expected_serial.into_iter().map(char::from).collect(),
+			expected.into_iter().map(char::from).collect(),
 			sync_writer.into_inner().into_iter().map(char::from).collect(),
 		)),
 	}
@@ -160,8 +201,8 @@ fn main() {
 	let args = CliArgs::parse();
 
 	match args.operation {
-		Operation::Test { maximum_m_cycles, expected_serial } => {
-			match run_test(args.rom.as_path(), maximum_m_cycles, expected_serial.as_path()) {
+		Operation::TestSerial { maximum_m_cycles, expected_serial } => {
+			match run_test::<false>(args.rom.as_path(), maximum_m_cycles, expected_serial.as_path()) {
 				Ok((m_cycles, duration)) => {
 					println!("Success! Ran {} M-Cycles in {}ms", m_cycles, duration.as_millis());
 				}
@@ -171,8 +212,8 @@ fn main() {
 				}
 			}
 		}
-		Operation::GenerateOutput { m_cycles, expected_serial } => {
-			match generate_output(args.rom.as_path(), m_cycles, expected_serial.as_path()) {
+		Operation::GenerateOutputSerial { m_cycles, expected_serial } => {
+			match generate_output::<false>(args.rom.as_path(), m_cycles, expected_serial.as_path()) {
 				Ok(duration) => {
 					println!("Successfully written serial output to {} in {} M-Cycles ({}ms), please verify it is correct", expected_serial.display(), m_cycles, duration.as_millis());
 				}
@@ -182,5 +223,27 @@ fn main() {
 				}
 			}
 		}
+		Operation::TestFramebuffer { maximum_m_cycles, expected_framebuffer } => {
+			match run_test::<true>(args.rom.as_path(), maximum_m_cycles, expected_framebuffer.as_path()) {
+				Ok((m_cycles, duration)) => {
+					println!("Success! Ran {} M-Cycles in {}ms", m_cycles, duration.as_millis());
+				}
+				Err(why) => {
+					eprintln!("{}", why);
+					std::process::exit(1);
+				}
+			}
+		},
+	    Operation::GenerateOutputFramebuffer { m_cycles, expected_framebuffer } => {
+			match generate_output::<true>(args.rom.as_path(), m_cycles, expected_framebuffer.as_path()) {
+				Ok(duration) => {
+					println!("Successfully written framebuffer output to {} in {} M-Cycles ({}ms), please verify it is correct", expected_framebuffer.display(), m_cycles, duration.as_millis());
+				}
+				Err(why) => {
+					eprintln!("{}", why);
+					std::process::exit(1);
+				}
+			}
+		},
 	}
 }

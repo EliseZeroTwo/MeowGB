@@ -50,10 +50,10 @@ cat >>$TEST_MD_FILE << EOF
 
 EOF
 
-for full_f in ./test-roms/blargg/roms/*.gb
+for full_f in ./test-roms/blargg/serial-roms/*.gb
 do
     f="${full_f##*/}"; f="${f%.*}";
-    TEST_CMD="./target/release/meowgb-tests test-roms/blargg/roms/$f.gb test -m 100000000 -s meowgb-tests/expected_output/blargg/$f.bin"
+    TEST_CMD="./target/release/meowgb-tests test-roms/blargg/serial-roms/$f.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/blargg/$f.bin"
 
     cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF
 
@@ -69,7 +69,7 @@ fi
 EOF
 
     cat >>$TEST_MD_FILE << EOF
-* $f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/blargg/$f.bin)
+* $f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/serial/blargg/$f.bin)
 EOF
 
     tee -a $GH_ACTION_OUTPUT_FILE $FJ_ACTION_OUTPUT_FILE >/dev/null << EOF
@@ -86,10 +86,10 @@ cat >>$TEST_MD_FILE << EOF
 
 EOF
 
-for full_f in ./test-roms/mooneye-test-suite/roms/*.gb
+for full_f in ./test-roms/mooneye-test-suite/serial-roms/*.gb
 do
     f="${full_f##*/}"; f="${f%.*}";
-      TEST_CMD="./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/$f.gb test -m 100000000 -s meowgb-tests/expected_output/mooneye-test-suite/$f.bin"
+      TEST_CMD="./target/release/meowgb-tests test-roms/mooneye-test-suite/serial-roms/$f.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/mooneye-test-suite/$f.bin"
 
     cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF
 
@@ -105,7 +105,7 @@ fi
 EOF
 
     cat >>$TEST_MD_FILE << EOF
-* $f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/mooneye-test-suite/$f.bin)
+* $f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/serial/mooneye-test-suite/$f.bin)
 EOF
 
     tee -a $GH_ACTION_OUTPUT_FILE $FJ_ACTION_OUTPUT_FILE >/dev/null << EOF
@@ -116,7 +116,7 @@ EOF
 EOF
 done
 
-for directory in ./test-roms/mooneye-test-suite/roms/*/
+for directory in ./test-roms/mooneye-test-suite/serial-roms/*/
 do
   d=$(basename $directory)
 
@@ -126,10 +126,10 @@ do
 
 EOF
 
-  for full_f in ./test-roms/mooneye-test-suite/roms/$d/*.gb
+  for full_f in ./test-roms/mooneye-test-suite/serial-roms/$d/*.gb
   do
     f="${full_f##*/}"; f="${f%.*}";
-    TEST_CMD="./target/release/meowgb-tests test-roms/mooneye-test-suite/roms/$d/$f.gb test -m 100000000 -s meowgb-tests/expected_output/mooneye-test-suite/$d/$f.bin"
+    TEST_CMD="./target/release/meowgb-tests test-roms/mooneye-test-suite/serial-roms/$d/$f.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/mooneye-test-suite/$d/$f.bin"
 
     cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF
 
@@ -145,7 +145,7 @@ fi
 EOF
 
     cat >>$TEST_MD_FILE << EOF
-* $d/$f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/mooneye-test-suite/$d/$f.bin)
+* $d/$f.gb - [ROM]($full_f) - [Expected Serial Output](./meowgb-tests/expected_output/serial/mooneye-test-suite/$d/$f.bin)
 EOF
 
     tee -a $GH_ACTION_OUTPUT_FILE $FJ_ACTION_OUTPUT_FILE >/dev/null << EOF
@@ -156,6 +156,42 @@ EOF
 EOF
   done
 
+done
+
+cat >>$TEST_MD_FILE << EOF
+
+## Hacktix Test ROMs
+
+EOF
+
+for full_f in ./test-roms/hacktix/framebuffer-roms/*.gb
+do
+    f="${full_f##*/}"; f="${f%.*}";
+    TEST_CMD="./target/release/meowgb-tests test-roms/hacktix/framebuffer-roms/$f.gb test-framebuffer -m 100000000 -s meowgb-tests/expected_output/framebuffer/hacktix/$f.bin"
+
+    cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF
+
+echo "Running test ROM $full_f"
+
+TEST_TOTAL=\$((TEST_TOTAL + 1))
+
+if res=\$($TEST_CMD 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=\$((TEST_SUCCESS + 1))
+else
+  echo "Failed: \$res"
+fi
+EOF
+
+    cat >>$TEST_MD_FILE << EOF
+* $f.gb - [ROM]($full_f) - [Expected Framebuffer (RGBA32)](./meowgb-tests/expected_output/framebuffer/hacktix/$f.bin)
+EOF
+
+    tee -a $GH_ACTION_OUTPUT_FILE $FJ_ACTION_OUTPUT_FILE >/dev/null << EOF
+        
+      - name: Run test ROM (hacktix $f)
+        if: always()
+        run: $TEST_CMD
+EOF
 done
 
 cat >>$TEST_SCRIPT_OUTPUT_FILE << EOF

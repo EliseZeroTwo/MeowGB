@@ -273,7 +273,9 @@ pub struct PpuRegisters {
 	pub scx: u8,
 	pub ly: u8,
 	cycles_since_last_ly_increment: u64,
+	cycles_since_stat_mode_0: u64,
 	cycles_since_last_last_mode_start_increment: [u64; 4],
+	cycles_since_stat_mode_2: u64,
 	pub lyc: u8,
 	pub wy: u8,
 	pub wx: u8,
@@ -306,6 +308,7 @@ pub struct Ppu {
 	total_dots: u16,
 
 	is_irq_high: bool,
+	window_counter: usize,
 }
 
 impl Ppu {
@@ -320,16 +323,17 @@ impl Ppu {
 		self.first_frame = true;
 		self.first_line = true;
 		self.total_dots = 0;
+		self.window_counter = 0;
 	}
 
 	pub fn start(&mut self, interrupts: &mut Interrupts) {
 		self.set_scanline(interrupts, 0);
 	}
 
-	pub fn new(bootrom_ran: bool) -> Self {
+	pub fn new() -> Self {
 		Self {
 			registers: PpuRegisters {
-				lcdc: (!bootrom_ran).then_some(0b1001_0001).unwrap_or_default(),
+				lcdc: 0b1001_0001,
 				stat_flags: StatFlags::default(),
 				mode: PPUMode::HBlank,
 				scy: 0,
@@ -341,6 +345,8 @@ impl Ppu {
 				wy: 0,
 				wx: 0,
 				ly_lyc: true,
+				cycles_since_stat_mode_0: 0,
+				cycles_since_stat_mode_2: 0,
 			},
 			vram: [0; 0x2000],
 			oam: [0; 0xA0],
@@ -359,6 +365,7 @@ impl Ppu {
 			total_dots: 0,
 			first_line: true,
 			is_irq_high: false,
+			window_counter: 0,
 		}
 	}
 
@@ -383,6 +390,11 @@ impl Ppu {
 			self.is_irq_high = stat_int || ly_eq_lyc_int || vblank_causing_oam_int_bug;
 
 			if !old_irq_high && self.is_irq_high {
+				if stat_int && self.registers.mode == PPUMode::HBlank {
+					self.registers.cycles_since_stat_mode_0 = 0;
+				} else if stat_int && self.registers.mode == PPUMode::SearchingOAM {
+					self.registers.cycles_since_stat_mode_2 = 0;
+				}
 				interrupts.write_if_lcd_stat(true);
 			}
 		}
@@ -415,7 +427,7 @@ impl Ppu {
 	}
 
 	pub fn sprite_height(&self) -> SpriteHeight {
-		match (self.registers.lcdc >> 2) == 1 {
+		match (self.registers.lcdc >> 2) & 0b1 == 1 {
 			false => SpriteHeight::Eight,
 			true => SpriteHeight::Sixteen,
 		}
@@ -546,11 +558,14 @@ impl Ppu {
 	}
 
 	fn set_scanline(&mut self, interrupts: &mut Interrupts, scanline: u8) {
-		// println!("LY incrementing: {} cycles since last incrementation. cycles since:
-		// {:?}", self.registers.cycles_since_last_ly_increment,
-		// self.registers.cycles_since_last_last_mode_start_increment.iter().
-		// enumerate().map(|(idx, value)| { 		let idx_enum = match idx {
-		// 			0 => PPUMode::HBlank,
+		// println!("LY incrementing: {} cycles since last incrementation and {} cycles
+		// since last stat mode0 interrupt",
+		// self.registers.cycles_since_last_ly_increment,
+		// self.registers.cycles_since_stat_mode_0); println!("LY incrementing: {}
+		// cycles since last incrementation. cycles since: {:?}", self.registers.
+		// cycles_since_last_ly_increment, self.registers.
+		// cycles_since_last_last_mode_start_increment.iter(). enumerate().map(|(idx,
+		// value)| { 		let idx_enum = match idx { 			0 => PPUMode::HBlank,
 		// 			1 => PPUMode::VBlank,
 		// 			2 => PPUMode::SearchingOAM,
 		// 			3 => PPUMode::TransferringData,
@@ -568,13 +583,16 @@ impl Ppu {
 	pub fn tick(&mut self, dma_state: &DmaState, interrupts: &mut Interrupts) -> bool {
 		if self.enabled() {
 			self.registers.cycles_since_last_ly_increment += 1;
+			self.registers.cycles_since_stat_mode_0 += 1;
+			self.registers.cycles_since_stat_mode_2 += 1;
 			match self.mode() {
 				PPUMode::SearchingOAM => {
 					self.registers.cycles_since_last_last_mode_start_increment[2] += 1;
 					if self.current_dot == 0 {
 						if self.registers.ly == 0 {
-							self.wy_match = self.registers.wy == self.registers.ly;
+							self.wy_match = false;
 						}
+						self.wy_match |= self.registers.wy == self.registers.ly;
 						self.sprite_buffer = [None; 10];
 						self.sprite_count = 0;
 					}
@@ -679,6 +697,7 @@ impl Ppu {
 					false
 				}
 				PPUMode::VBlank => {
+					self.window_counter = 0;
 					self.registers.cycles_since_last_last_mode_start_increment[1] += 1;
 					self.current_dot += 1;
 					if self.current_dot % 456 == 0 {
@@ -711,8 +730,9 @@ impl Ppu {
 
 	fn clear_line_sprite_fb(&mut self, real_line_number: usize) {
 		assert!(real_line_number < FB_HEIGHT as usize);
-		for value in 0..256 {
-			let idx = ((real_line_number * FB_WIDTH as usize) + value) * PIXEL_SIZE;
+		let y_fb_offset = (real_line_number * FB_WIDTH as usize) * PIXEL_SIZE;
+		for value in 0..FB_WIDTH as usize {
+			let idx = y_fb_offset + (value * PIXEL_SIZE);
 			self.sprite_framebuffer[idx] = 0;
 			self.sprite_framebuffer[idx + 1] = 0;
 			self.sprite_framebuffer[idx + 2] = 0;
@@ -724,6 +744,7 @@ impl Ppu {
 		let state = match self.current_draw_state.take() {
 			Some(state) => state,
 			None => {
+				self.clear_line_sprite_fb(self.registers.ly as usize);
 				let scrolling_delay = self.registers.scx % 8;
 				self.dot_target += scrolling_delay as u16;
 				if scrolling_delay != 0 {
@@ -733,7 +754,6 @@ impl Ppu {
 						self.registers.scy,
 					)
 				} else {
-					self.clear_line_sprite_fb(self.registers.ly as usize);
 					LineDrawingState::BackgroundAndObjectFifo(
 						self.registers.scx,
 						self.registers.scy,
@@ -760,7 +780,6 @@ impl Ppu {
 						false,
 						self.registers.lcdc & 0b1 == 0,
 					));
-					self.clear_line_sprite_fb(self.registers.ly as usize);
 				}
 			}
 			LineDrawingState::BackgroundAndObjectFifo(
@@ -770,8 +789,6 @@ impl Ppu {
 				mut window_drawn,
 				draw_only_sprites,
 			) => {
-				// assert_eq!(scy, self.registers.scy);
-				// assert_eq!(scx, self.registers.scx);
 				let wx_match = (drawn_pixels as usize + 7) >= self.registers.wx as usize;
 				let scrolled_y = self.registers.ly.wrapping_add(scy) as usize;
 				let scrolled_x = drawn_pixels.wrapping_add(scx) as usize;
@@ -795,14 +812,16 @@ impl Ppu {
 								as usize;
 							let window_y =
 								self.registers.ly.wrapping_sub(self.registers.wy) as usize;
-							let tilemap_idx = window_x / 8 + ((window_y / 8) * 32);
+							let tilemap_idx = window_x / 8 + ((self.window_counter / 8) * 32);
 							let tilemap_value = self.read_window_tile_map()[tilemap_idx];
-							(bg_color_id, bg_color) = Self::parse_tile_color(
+							let (window_color_id, window_color) = Self::parse_tile_color(
 								self.read_bg_win_tile(tilemap_value),
 								window_x % 8,
 								window_y % 8,
 								&self.bgp,
 							);
+							bg_color_id = window_color_id;
+							bg_color = window_color;
 						}
 
 						(bg_color_id, bg_color)
@@ -816,69 +835,82 @@ impl Ppu {
 					self.framebuffer[framebuffer_offset + idx] = *byte;
 				}
 
-				let mut sprite_buffer = Vec::new();
-				for sprite_idx in 0..self.sprite_count {
-					// WARNING: Sprites are not scrolled, they have an absolute position!
-					let sprite = self.sprite_buffer[sprite_idx]
-						.as_ref()
-						.expect("within the sprite count there should be non `None`s");
+				if (self.registers.lcdc >> 1) & 0b1 == 1 {
+					let mut sprite_buffer: Vec<OAMEntry> = Vec::new();
+					for sprite_idx in 0..self.sprite_count {
+						// WARNING: Sprites are not scrolled, they have an absolute position!
+						let sprite = self.sprite_buffer[sprite_idx]
+							.as_ref()
+							.expect("within the sprite count there should be no `None`s");
 
-					let x_valid =
-						drawn_pixels < sprite.x && drawn_pixels.wrapping_add(8) >= sprite.x;
-					let y_valid = self.registers.ly < sprite.y
-						&& self.registers.ly.wrapping_add(16) >= sprite.y;
+						let x_valid =
+							drawn_pixels < sprite.x && drawn_pixels.wrapping_add(8) >= sprite.x;
+						let y_valid = self.registers.ly < sprite.y
+							&& self.registers.ly.wrapping_add(16) >= sprite.y;
 
-					if x_valid && y_valid {
-						sprite_buffer.push(*sprite);
-					}
-				}
-
-				sprite_buffer.sort_by(|l, r| l.x.cmp(&r.x));
-
-				// TODO: Adjust mode length based on sprites
-				for sprite in &sprite_buffer {
-					let mut sprite_x_idx =
-						drawn_pixels.wrapping_sub(sprite.x.wrapping_sub(8)) as usize;
-					let mut sprite_y_idx =
-						self.registers.ly.wrapping_sub(sprite.y.wrapping_sub(16)) as usize;
-
-					let tile_idx = match self.sprite_height() {
-						SpriteHeight::Eight => sprite.tile_idx,
-						SpriteHeight::Sixteen => match sprite_y_idx >= 8 {
-							true => sprite.tile_idx | 1,
-							false => sprite.tile_idx & 0xFE,
-						},
-					};
-
-					if sprite_y_idx >= 8 {
-						sprite_y_idx -= 8;
-						assert!(sprite_y_idx < 8);
+						if !sprite_buffer.iter().any(|existing| existing.x == sprite.x)
+							&& x_valid && y_valid
+						{
+							sprite_buffer.push(*sprite);
+						}
 					}
 
-					if sprite.y_flip() {
-						sprite_y_idx = 7 - sprite_y_idx;
-					}
+					sprite_buffer.sort_by(|l, r| r.x.cmp(&l.x));
 
-					if sprite.x_flip() {
-						sprite_x_idx = 7 - sprite_x_idx;
-					}
+					// TODO: Adjust mode length based on sprites
+					for sprite in &sprite_buffer {
+						let mut sprite_x_idx =
+							drawn_pixels.wrapping_sub(sprite.x.wrapping_sub(8)) as usize;
+						let mut sprite_y_idx =
+							self.registers.ly.wrapping_sub(sprite.y.wrapping_sub(16)) as usize;
 
-					let color_id =
-						self.read_obj_tile_colour_id(tile_idx, sprite_x_idx, sprite_y_idx);
-					let palette = &self.obp[sprite.palette_number() as usize];
-					let sprite_color = palette.color_from_2bit(color_id);
+						if sprite.y_flip() {
+							let sprite_offset = match self.sprite_height() {
+								SpriteHeight::Eight => 7,
+								SpriteHeight::Sixteen => 15,
+							};
+							sprite_y_idx = sprite_offset - sprite_y_idx;
+						}
 
-					if color_id != 0 && !(sprite.covered_by_bg_window() && bg_color_id != 0) {
-						self.sprite_framebuffer[framebuffer_offset + 0] = sprite_color.rgba()[0];
-						self.sprite_framebuffer[framebuffer_offset + 1] = sprite_color.rgba()[1];
-						self.sprite_framebuffer[framebuffer_offset + 2] = sprite_color.rgba()[2];
-						self.sprite_framebuffer[framebuffer_offset + 3] = sprite_color.rgba()[3];
+						if sprite.x_flip() {
+							sprite_x_idx = 7 - sprite_x_idx;
+						}
+
+						let tile_idx = match self.sprite_height() {
+							SpriteHeight::Eight => sprite.tile_idx,
+							SpriteHeight::Sixteen => match sprite_y_idx >= 8 {
+								true => sprite.tile_idx | 1,
+								false => sprite.tile_idx & 0xFE,
+							},
+						};
+
+						if sprite_y_idx >= 8 {
+							sprite_y_idx -= 8;
+							assert!(sprite_y_idx < 8);
+						}
+
+						let color_id =
+							self.read_obj_tile_colour_id(tile_idx, sprite_x_idx, sprite_y_idx);
+						let palette = &self.obp[sprite.palette_number() as usize];
+						let sprite_color = palette.color_from_2bit(color_id);
+
+						let sprite_covered = sprite.covered_by_bg_window() && bg_color_id != 0;
+
+						if color_id != 0 && !sprite_covered {
+							let [r, g, b, a] = *sprite_color.rgba();
+
+							self.sprite_framebuffer[framebuffer_offset + 0] = r;
+							self.sprite_framebuffer[framebuffer_offset + 1] = g;
+							self.sprite_framebuffer[framebuffer_offset + 2] = b;
+							self.sprite_framebuffer[framebuffer_offset + 3] = a;
+						}
 					}
 				}
 
 				drawn_pixels += 1;
 				if drawn_pixels == FB_WIDTH as u8 {
 					if window_drawn {
+						self.window_counter += 1;
 						self.dot_target += 6;
 					}
 					self.current_draw_state = Some(LineDrawingState::Finished);

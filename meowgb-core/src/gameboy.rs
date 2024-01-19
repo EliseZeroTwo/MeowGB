@@ -1,4 +1,3 @@
-pub mod bootrom;
 pub mod cpu;
 pub mod dma;
 pub mod interrupts;
@@ -27,10 +26,12 @@ use self::{
 #[cfg(feature = "instr-dbg")]
 use crate::ringbuffer::RingBuffer;
 
+pub type GenericCartridge = dyn Mapper + Send + Sync;
+
 pub struct Gameboy<S: SerialWriter> {
 	pub ppu: Ppu,
 	pub memory: Memory,
-	pub cartridge: Option<Box<dyn Mapper + Send + Sync>>,
+	pub cartridge: Option<Box<GenericCartridge>>,
 	pub interrupts: Interrupts,
 	pub timer: Timer,
 	pub registers: Registers,
@@ -54,20 +55,21 @@ pub struct Gameboy<S: SerialWriter> {
 }
 
 impl<S: SerialWriter> Gameboy<S> {
-	pub fn new(bootrom: Option<[u8; 0x100]>, serial_writer: S) -> Self {
-		Self {
-			memory: Memory::new(bootrom),
-			cartridge: None,
+	pub fn new(serial_writer: S, rom: Option<Vec<u8>>) -> Self {
+		Self::new_with_cartridge(serial_writer, rom.map(Self::parse_rom))
+	}
+
+	pub fn new_with_cartridge(serial_writer: S, cartridge: Option<Box<GenericCartridge>>) -> Self {
+		let mut out = Self {
+			memory: Memory::new(),
+			cartridge,
 			interrupts: Interrupts::new(),
 			timer: Timer::new(),
 			joypad: Joypad::new(),
 			serial: Serial::new(serial_writer),
 			dma: DmaState::new(),
-			ppu: Ppu::new(bootrom.is_some()),
-			registers: match bootrom.is_some() {
-				true => Registers::default(),
-				false => Registers::post_rom(),
-			},
+			ppu: Ppu::new(),
+			registers: Registers::default(),
 			sound: Sound::new(),
 			halt: false,
 			halt_bug: false,
@@ -78,18 +80,166 @@ impl<S: SerialWriter> Gameboy<S> {
 			last_write: None,
 			#[cfg(feature = "instr-dbg")]
 			pc_history: RingBuffer::new(),
+		};
+
+		out.run_bootrom();
+		out.registers.set_post_rom();
+
+		out
+	}
+
+	pub fn run_bootrom(&mut self) {
+		macro_rules! push8 {
+			($byte:expr) => {
+				self.registers.sp = self.registers.sp.overflowing_sub(1).0;
+				self.debug_write_u8(self.registers.sp, $byte);
+			};
+		}
+
+		macro_rules! push16 {
+			($byte:expr) => {
+				push8!(($byte >> 8) as u8);
+				push8!($byte as u8);
+			};
+		}
+
+		macro_rules! pop8 {
+			() => {
+				{
+					let res = self.debug_read_u8(self.registers.sp);
+					self.registers.sp = self.registers.sp.overflowing_add(1).0;
+					res
+				}
+			};
+		}
+
+		macro_rules! pop16 {
+			() => {
+				(pop8!() as u16) | ((pop8!() as u16) << 8)
+			};
+		}
+
+		macro_rules! rl {
+			($reg:ident) => {
+				{
+					let new_carry = self.registers.$reg >> 7 == 1;
+					self.registers.$reg <<= 1;
+
+					if self.registers.get_carry() {
+						self.registers.$reg |= 1;
+					}
+
+					self.registers.set_carry(new_carry);
+				}
+			};
+		}
+
+		self.registers.sp = 0xFFFE;
+		
+		// Clear VRAM
+		self.registers.a = 0;
+		let mut address = 0x9FFF;
+		while address >= 0x8000 {
+			self.debug_write_u8(address, 0);
+			address -= 1;
+		}
+
+		// // Configure Audio
+		// self.registers.set_hl(0xFF26);
+		// self.registers.c = 0x11;
+		// self.registers.a = 0x80;
+		// let hl_content = self.registers.get_hl();
+		// self.debug_write_u8(hl_content, self.registers.a);
+		// self.registers.set_hl(hl_content - 1);
+		// self.debug_write_u8(0xFF00 | self.registers.c as u16, self.registers.a);
+		// self.registers.c += 1;
+		// self.registers.a = 0xF3;
+		// self.debug_write_u8(0xFF00 | self.registers.c as u16, self.registers.a);
+		// let hl_content = self.registers.get_hl();
+		// self.debug_write_u8(hl_content, self.registers.a);
+		// self.registers.set_hl(hl_content - 1);
+		// self.registers.a = 0x77;
+		// self.debug_write_u8(hl_content, self.registers.a);
+		
+		// Configure Background Palette
+		self.registers.a = 0xFC;
+		self.debug_write_u8(0xFF47, self.registers.a);
+
+		// Load logo data from cartridge into VRAM
+		self.registers.set_de(0x0104);
+		self.registers.set_hl(0x8010);
+
+		loop {
+			self.registers.a = self.debug_read_u8(self.registers.get_de());
+			
+			self.registers.c = self.registers.a;
+			for _ in 0..2 {
+				self.registers.b = 4;
+				while self.registers.b != 0 {
+					push16!(self.registers.get_bc());
+					rl!(c);
+					rl!(a);
+					let bc = pop16!();
+					self.registers.set_bc(bc);
+					rl!(c);
+					rl!(a);
+					self.registers.b -= 1;
+				}
+				self.debug_write_u8(self.registers.get_hl(), self.registers.a);
+				self.registers.set_hl(self.registers.get_hl() + 2);
+				self.debug_write_u8(self.registers.get_hl(), self.registers.a);
+				self.registers.set_hl(self.registers.get_hl() + 2);
+			}
+			
+			self.registers.set_de(self.registers.get_de() + 1);
+			self.registers.a = self.registers.e;
+
+			assert!(self.registers.a <= 0x34);
+			if self.registers.a == 0x34 {
+				break;
+			}
+		}
+
+		// Extra 8 bytes into VRAM from BROM
+		const EXTRA_VRAM_DATA: [u8; 8] = [0x3C, 0x42, 0xB9, 0xA5, 0xB9, 0xA5, 0x42, 0x3C];
+		for value in EXTRA_VRAM_DATA {
+			self.registers.a = value;
+			self.debug_write_u8(self.registers.get_hl(), self.registers.a);
+			self.registers.set_hl(self.registers.get_hl() + 2);
+		}
+		self.registers.set_de(0xE0);
+		self.registers.b = 0;
+
+		// BG Tilemap
+		self.registers.a = 0x19;
+		self.debug_write_u8(0x9910, self.registers.a);
+		self.registers.set_hl(0x992F);
+
+		'outer: loop {
+			self.registers.c = 0xc;
+			while self.registers.c != 0 {
+				self.registers.a -= 1;
+				if self.registers.a == 0 {
+					break 'outer;
+				}
+
+				self.debug_write_u8(self.registers.get_hl(), self.registers.a);
+				self.registers.set_hl(self.registers.get_hl() - 1);
+				self.registers.c -= 1;
+			}
+			self.registers.l = 0xf;
 		}
 	}
 
-	pub fn load_cartridge(&mut self, bytes: Vec<u8>) {
+	fn parse_rom(bytes: Vec<u8>) -> Box<GenericCartridge> {
 		if bytes.len() < 0x150 {
 			panic!("Bad cartridge (len < 0x150)");
 		}
 		match bytes[0x147] {
-			0 => self.cartridge = Some(Box::new(NoMBC::new(bytes))),
-			1 => self.cartridge = Some(Box::new(MBC1::new(bytes))),
-			2 => self.cartridge = Some(Box::new(MBC1::new(bytes))),
-			3 => self.cartridge = Some(Box::new(MBC1::new(bytes))),
+			0 => Box::new(NoMBC::new(bytes)),
+			1 => Box::new(MBC1::new(bytes)),
+			2 => Box::new(MBC1::new(bytes)),
+			3 => Box::new(MBC1::new(bytes)),
 			other => unimplemented!("Cartidge type: {:#X}", other),
 		}
 	}
@@ -105,9 +255,9 @@ impl<S: SerialWriter> Gameboy<S> {
 
 	pub fn tick(&mut self) -> bool {
 		if self.tick_count == 0 {
+			self.dma.tick_dma(&mut self.ppu, &self.memory, self.cartridge.as_deref());
 			cpu::tick_cpu(self);
 			let redraw_requested = self.ppu.tick(&self.dma, &mut self.interrupts);
-			self.dma.tick_dma(&mut self.ppu, &self.memory, self.cartridge.as_deref());
 			self.serial.tick(&mut self.interrupts);
 			self.timer.tick(&mut self.interrupts);
 
@@ -244,11 +394,7 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFF4B => self.ppu.registers.wx = value,
 			0xFF4C..=0xFF4E => {} // Unused
 			0xFF4F => {}          // CGB VRAM Bank Select
-			0xFF50 => {
-				if value & 0b1 == 1 {
-					self.memory.bootrom_disabled = true;
-				}
-			}
+			0xFF50 => {} // BROM lockout
 			0xFF51..=0xFF55 => {} // CGB VRAM DMA
 			0xFF56..=0xFF67 => {} // Unused
 			0xFF68..=0xFF69 => {} // CGB BG/OBJ Palettes
@@ -273,7 +419,6 @@ impl<S: SerialWriter> Gameboy<S> {
 	/// debugging/testing purposes
 	pub fn debug_read_u8(&self, address: u16) -> u8 {
 		match address {
-			0..=0xFF if !self.memory.bootrom_disabled => self.memory.bootrom[address as usize],
 			0..=0x7FFF => match self.cartridge.as_ref() {
 				Some(mapper) => mapper.read_rom_u8(address),
 				None => 0xFF,
@@ -298,7 +443,6 @@ impl<S: SerialWriter> Gameboy<S> {
 	#[allow(unused)]
 	pub fn debug_write_u8(&mut self, address: u16, value: u8) {
 		match address {
-			0..=0xFF if !self.memory.bootrom_disabled => {}
 			0..=0x7FFF => {
 				if let Some(mapper) = self.cartridge.as_mut() {
 					mapper.write_rom_u8(address, value)
@@ -330,13 +474,13 @@ impl<S: SerialWriter> Gameboy<S> {
 		self.registers.mem_op_happened = true;
 		let value = match self.dma.is_conflict(address) {
 			true => match address {
-				0..=0xFEFF => 0xFF,
+				0..=0xFDFF => self.dma.read_next_byte(&self.ppu, &self.memory, self.cartridge.as_deref()),
+				0xFE00..=0xFEFF => 0xFF,
 				0xFF00..=0xFF7F => self.cpu_read_io(address),
 				0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80],
 				0xFFFF => self.interrupts.interrupt_enable,
 			},
 			false => match address {
-				0..=0xFF if !self.memory.bootrom_disabled => self.memory.bootrom[address as usize],
 				0..=0x7FFF => match self.cartridge.as_ref() {
 					Some(mapper) => mapper.read_rom_u8(address),
 					None => 0xFF,
@@ -374,7 +518,6 @@ impl<S: SerialWriter> Gameboy<S> {
 				0xFFFF => self.interrupts.cpu_set_interrupt_enable(value),
 			},
 			false => match address {
-				0..=0xFF if !self.memory.bootrom_disabled => {}
 				0..=0x7FFF => {
 					if let Some(mapper) = self.cartridge.as_mut() {
 						mapper.write_rom_u8(address, value)

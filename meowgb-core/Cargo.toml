@@ -13,4 +13,3 @@ paste = "1.0.6"
 meowgb-opcode = { path = "../meowgb-opcode" }
 bmp = "0.5.0"
 thiserror = "1.0.30"
-sha1 = { version = "0.10.6", features = ["std"] }

@@ -9,7 +9,7 @@ macro_rules! joypad_input {
 	($input:ident, $mode:ident) => {
 		paste::paste! {
 			pub fn [<set_ $input>](&mut self, val: bool) {
-				if val && self.mode == JoypadMode::$mode {
+				if val && (self.mode == JoypadMode::$mode || self.mode == JoypadMode::Both) {
 					self.interrupt_triggered = true;
 				}
 				self.$input = val;
@@ -17,7 +17,7 @@ macro_rules! joypad_input {
 
 			pub fn [<invert_ $input>](&mut self) {
 				let val = !self.$input;
-				if val && self.mode == JoypadMode::$mode {
+				if val && (self.mode == JoypadMode::$mode || self.mode == JoypadMode::Both) {
 					self.interrupt_triggered = true;
 				}
 				self.$input = val;
@@ -86,9 +86,9 @@ impl Joypad {
 	joypad_input!(right, Direction);
 
 	pub fn cpu_write(&mut self, content: u8) {
-		if (content >> 5) & 0b1 == 0 {
+		if (content >> 5) & 0b1 == 0 && (content >> 4) & 0b1 == 1 {
 			self.mode = JoypadMode::Action;
-		} else if (content >> 4) & 0b1 == 0 {
+		} else if (content >> 4) & 0b1 == 0 && (content >> 5) & 0b1 == 1 {
 			self.mode = JoypadMode::Direction;
 		} else {
 			self.mode = JoypadMode::Both;

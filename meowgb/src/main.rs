@@ -13,7 +13,6 @@ use std::{
 use clap::Parser;
 use config::MeowGBConfig;
 use meowgb_core::gameboy::{
-	bootrom::{verify_parse_bootrom, BootromParseError},
 	serial::SerialWriter,
 	Gameboy,
 };
@@ -23,9 +22,6 @@ use window::events::{EmulatorDebugEvent, EmulatorWindowEvent, GameboyEvent};
 #[derive(Debug, Parser)]
 /// DMG Emulator
 pub struct CliArgs {
-	/// bootrom path
-	#[clap(long)]
-	pub bootrom: Option<PathBuf>,
 	/// game path
 	#[clap(long)]
 	pub rom: Option<PathBuf>,
@@ -38,9 +34,6 @@ pub struct CliArgs {
 #[derive(Debug, Parser)]
 /// DMG Emulator
 pub struct CliArgs {
-	/// bootrom path
-	#[clap(long)]
-	pub bootrom: Option<PathBuf>,
 	/// game path
 	#[clap(long)]
 	pub rom: Option<PathBuf>,
@@ -48,8 +41,6 @@ pub struct CliArgs {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MeowGBError {
-	#[error(transparent)]
-	Bootrom(BootromParseError),
 	#[error("Game Not Found")]
 	GameNotFound,
 	#[error("IO Error: {0}")]
@@ -71,12 +62,18 @@ fn real_main() -> Result<(), MeowGBError> {
 		path.file_name().and_then(|name| name.to_str().map(str::to_string).map(Cow::Owned))
 	});
 
-	let bootrom = match args.bootrom.as_deref() {
-		Some(path) => Some(verify_parse_bootrom(path).map_err(MeowGBError::Bootrom)?),
-		None => None,
+	let rom = match args.rom.as_deref() {
+		Some(rom) => {
+			if !rom.is_file() {
+				return Err(MeowGBError::GameNotFound);
+			}
+	
+			Some(std::fs::read(rom)?)
+		},
+		None => None
 	};
 
-	let mut gameboy = WrappedGameboy::new(Gameboy::new(bootrom, std::io::stdout()));
+	let mut gameboy = WrappedGameboy::new(Gameboy::new(std::io::stdout(), rom));
 	#[cfg(feature = "debugger")]
 	let dbg = args.debug;
 	#[cfg(not(feature = "debugger"))]
@@ -87,7 +84,7 @@ fn real_main() -> Result<(), MeowGBError> {
 
 	let jh = std::thread::Builder::new()
 		.name(String::from("mewmulator"))
-		.spawn(move || run_gameboy(args, gameboy_2, gb_side_rx, gb_side_tx).unwrap())
+		.spawn(move || run_gameboy(gameboy_2, gb_side_rx, gb_side_tx).unwrap())
 		.unwrap();
 
 	window::run_window(
@@ -123,25 +120,10 @@ impl<W: SerialWriter> WrappedGameboy<W> {
 }
 
 pub fn run_gameboy(
-	args: CliArgs,
 	gameboy_arc: Arc<RwLock<WrappedGameboy<impl SerialWriter>>>,
 	rx: Receiver<EmulatorWindowEvent>,
 	tx: Sender<GameboyEvent>,
 ) -> Result<(), MeowGBError> {
-	let mut gameboy = gameboy_arc.write().unwrap();
-
-	if let Some(rom) = args.rom {
-		if !rom.is_file() {
-			return Err(MeowGBError::GameNotFound);
-		}
-
-		let rom = std::fs::read(rom.as_path())?;
-
-		gameboy.gameboy.load_cartridge(rom)
-	}
-
-	drop(gameboy);
-
 	let mut goal = time::OffsetDateTime::now_utc() + time::Duration::milliseconds(1000 / 60);
 	let mut frame_counter = 0;
 	let mut debugging_tbf = None;
