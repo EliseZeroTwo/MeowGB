@@ -104,13 +104,11 @@ impl<S: SerialWriter> Gameboy<S> {
 		}
 
 		macro_rules! pop8 {
-			() => {
-				{
-					let res = self.debug_read_u8(self.registers.sp);
-					self.registers.sp = self.registers.sp.overflowing_add(1).0;
-					res
-				}
-			};
+			() => {{
+				let res = self.debug_read_u8(self.registers.sp);
+				self.registers.sp = self.registers.sp.overflowing_add(1).0;
+				res
+			}};
 		}
 
 		macro_rules! pop16 {
@@ -120,22 +118,20 @@ impl<S: SerialWriter> Gameboy<S> {
 		}
 
 		macro_rules! rl {
-			($reg:ident) => {
-				{
-					let new_carry = self.registers.$reg >> 7 == 1;
-					self.registers.$reg <<= 1;
+			($reg:ident) => {{
+				let new_carry = self.registers.$reg >> 7 == 1;
+				self.registers.$reg <<= 1;
 
-					if self.registers.get_carry() {
-						self.registers.$reg |= 1;
-					}
-
-					self.registers.set_carry(new_carry);
+				if self.registers.get_carry() {
+					self.registers.$reg |= 1;
 				}
-			};
+
+				self.registers.set_carry(new_carry);
+			}};
 		}
 
 		self.registers.sp = 0xFFFE;
-		
+
 		// Clear VRAM
 		self.registers.a = 0;
 		let mut address = 0x9FFF;
@@ -160,7 +156,7 @@ impl<S: SerialWriter> Gameboy<S> {
 		// self.registers.set_hl(hl_content - 1);
 		// self.registers.a = 0x77;
 		// self.debug_write_u8(hl_content, self.registers.a);
-		
+
 		// Configure Background Palette
 		self.registers.a = 0xFC;
 		self.debug_write_u8(0xFF47, self.registers.a);
@@ -171,7 +167,7 @@ impl<S: SerialWriter> Gameboy<S> {
 
 		loop {
 			self.registers.a = self.debug_read_u8(self.registers.get_de());
-			
+
 			self.registers.c = self.registers.a;
 			for _ in 0..2 {
 				self.registers.b = 4;
@@ -190,7 +186,7 @@ impl<S: SerialWriter> Gameboy<S> {
 				self.debug_write_u8(self.registers.get_hl(), self.registers.a);
 				self.registers.set_hl(self.registers.get_hl() + 2);
 			}
-			
+
 			self.registers.set_de(self.registers.get_de() + 1);
 			self.registers.a = self.registers.e;
 
@@ -394,7 +390,7 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFF4B => self.ppu.registers.wx = value,
 			0xFF4C..=0xFF4E => {} // Unused
 			0xFF4F => {}          // CGB VRAM Bank Select
-			0xFF50 => {} // BROM lockout
+			0xFF50 => {}          // BROM lockout
 			0xFF51..=0xFF55 => {} // CGB VRAM DMA
 			0xFF56..=0xFF67 => {} // Unused
 			0xFF68..=0xFF69 => {} // CGB BG/OBJ Palettes
@@ -474,7 +470,9 @@ impl<S: SerialWriter> Gameboy<S> {
 		self.registers.mem_op_happened = true;
 		let value = match self.dma.is_conflict(address) {
 			true => match address {
-				0..=0xFDFF => self.dma.read_next_byte(&self.ppu, &self.memory, self.cartridge.as_deref()),
+				0..=0xFDFF => {
+					self.dma.read_next_byte(&self.ppu, &self.memory, self.cartridge.as_deref())
+				}
 				0xFE00..=0xFEFF => 0xFF,
 				0xFF00..=0xFF7F => self.cpu_read_io(address),
 				0xFF80..=0xFFFE => self.memory.hram[address as usize - 0xFF80],

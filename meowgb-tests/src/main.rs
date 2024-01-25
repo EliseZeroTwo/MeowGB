@@ -123,17 +123,14 @@ fn generate_output<const FRAMEBUFFER: bool>(
 	drop(gameboy);
 
 	if FRAMEBUFFER {
-		std::fs::write(expected, &fb.unwrap())
-			.map_err(DmgTestError::OutputFileWrite)?;
+		std::fs::write(expected, &fb.unwrap()).map_err(DmgTestError::OutputFileWrite)?;
 	} else {
 		let serial_content = sync_writer.into_inner();
-		std::fs::write(expected, &serial_content)
-			.map_err(DmgTestError::OutputFileWrite)?;
+		std::fs::write(expected, &serial_content).map_err(DmgTestError::OutputFileWrite)?;
 	}
 
 	Ok(instant.elapsed())
 }
-
 
 fn run_test<const FRAMEBUFFER: bool>(
 	rom: &Path,
@@ -155,7 +152,12 @@ fn run_test<const FRAMEBUFFER: bool>(
 	};
 
 	if FRAMEBUFFER {
-		assert_eq!(expected.len(), (meowgb_core::gameboy::ppu::FB_WIDTH as usize * meowgb_core::gameboy::ppu::FB_HEIGHT as usize) * meowgb_core::gameboy::ppu::PIXEL_SIZE as usize);
+		assert_eq!(
+			expected.len(),
+			(meowgb_core::gameboy::ppu::FB_WIDTH as usize
+				* meowgb_core::gameboy::ppu::FB_HEIGHT as usize)
+				* meowgb_core::gameboy::ppu::PIXEL_SIZE as usize
+		);
 	}
 
 	let sync_writer = SyncWriter::new();
@@ -202,7 +204,8 @@ fn main() {
 
 	match args.operation {
 		Operation::TestSerial { maximum_m_cycles, expected_serial } => {
-			match run_test::<false>(args.rom.as_path(), maximum_m_cycles, expected_serial.as_path()) {
+			match run_test::<false>(args.rom.as_path(), maximum_m_cycles, expected_serial.as_path())
+			{
 				Ok((m_cycles, duration)) => {
 					println!("Success! Ran {} M-Cycles in {}ms", m_cycles, duration.as_millis());
 				}
@@ -213,7 +216,8 @@ fn main() {
 			}
 		}
 		Operation::GenerateOutputSerial { m_cycles, expected_serial } => {
-			match generate_output::<false>(args.rom.as_path(), m_cycles, expected_serial.as_path()) {
+			match generate_output::<false>(args.rom.as_path(), m_cycles, expected_serial.as_path())
+			{
 				Ok(duration) => {
 					println!("Successfully written serial output to {} in {} M-Cycles ({}ms), please verify it is correct", expected_serial.display(), m_cycles, duration.as_millis());
 				}
@@ -224,7 +228,11 @@ fn main() {
 			}
 		}
 		Operation::TestFramebuffer { maximum_m_cycles, expected_framebuffer } => {
-			match run_test::<true>(args.rom.as_path(), maximum_m_cycles, expected_framebuffer.as_path()) {
+			match run_test::<true>(
+				args.rom.as_path(),
+				maximum_m_cycles,
+				expected_framebuffer.as_path(),
+			) {
 				Ok((m_cycles, duration)) => {
 					println!("Success! Ran {} M-Cycles in {}ms", m_cycles, duration.as_millis());
 				}
@@ -233,9 +241,13 @@ fn main() {
 					std::process::exit(1);
 				}
 			}
-		},
-	    Operation::GenerateOutputFramebuffer { m_cycles, expected_framebuffer } => {
-			match generate_output::<true>(args.rom.as_path(), m_cycles, expected_framebuffer.as_path()) {
+		}
+		Operation::GenerateOutputFramebuffer { m_cycles, expected_framebuffer } => {
+			match generate_output::<true>(
+				args.rom.as_path(),
+				m_cycles,
+				expected_framebuffer.as_path(),
+			) {
 				Ok(duration) => {
 					println!("Successfully written framebuffer output to {} in {} M-Cycles ({}ms), please verify it is correct", expected_framebuffer.display(), m_cycles, duration.as_millis());
 				}
@@ -244,6 +256,6 @@ fn main() {
 					std::process::exit(1);
 				}
 			}
-		},
+		}
 	}
 }

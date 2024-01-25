@@ -12,10 +12,7 @@ use std::{
 
 use clap::Parser;
 use config::MeowGBConfig;
-use meowgb_core::gameboy::{
-	serial::SerialWriter,
-	Gameboy,
-};
+use meowgb_core::gameboy::{serial::SerialWriter, Gameboy};
 use window::events::{EmulatorDebugEvent, EmulatorWindowEvent, GameboyEvent};
 
 #[cfg(feature = "debugger")]
@@ -67,10 +64,10 @@ fn real_main() -> Result<(), MeowGBError> {
 			if !rom.is_file() {
 				return Err(MeowGBError::GameNotFound);
 			}
-	
+
 			Some(std::fs::read(rom)?)
-		},
-		None => None
+		}
+		None => None,
 	};
 
 	let mut gameboy = WrappedGameboy::new(Gameboy::new(std::io::stdout(), rom));

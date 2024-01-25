@@ -75,6 +75,9 @@
 
 * ppu/intr_1_2_timing-GS.gb - [ROM](./test-roms/mooneye-test-suite/serial-roms/ppu/intr_1_2_timing-GS.gb) - [Expected Serial Output](./meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_1_2_timing-GS.bin)
 * ppu/intr_2_0_timing.gb - [ROM](./test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_0_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_0_timing.bin)
+* ppu/intr_2_mode0_timing.gb - [ROM](./test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_mode0_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_mode0_timing.bin)
+* ppu/intr_2_mode3_timing.gb - [ROM](./test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_mode3_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_mode3_timing.bin)
+* ppu/intr_2_oam_ok_timing.gb - [ROM](./test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_oam_ok_timing.gb) - [Expected Serial Output](./meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_oam_ok_timing.bin)
 * ppu/stat_irq_blocking.gb - [ROM](./test-roms/mooneye-test-suite/serial-roms/ppu/stat_irq_blocking.gb) - [Expected Serial Output](./meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/stat_irq_blocking.bin)
 * ppu/stat_lyc_onoff.gb - [ROM](./test-roms/mooneye-test-suite/serial-roms/ppu/stat_lyc_onoff.gb) - [Expected Serial Output](./meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/stat_lyc_onoff.bin)
 * ppu/vblank_stat_intr-GS.gb - [ROM](./test-roms/mooneye-test-suite/serial-roms/ppu/vblank_stat_intr-GS.gb) - [Expected Serial Output](./meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/vblank_stat_intr-GS.bin)

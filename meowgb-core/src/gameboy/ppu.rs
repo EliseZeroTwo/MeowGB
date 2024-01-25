@@ -35,6 +35,8 @@ enum LineDrawingState {
 	/// (original SCX, original SCY, drawn pixel count, window drawn, draw only
 	/// sprites)
 	BackgroundAndObjectFifo(u8, u8, u8, bool, bool),
+	/// (Cycles left)
+	WaitWindow(usize),
 	Finished,
 }
 
@@ -276,6 +278,7 @@ pub struct PpuRegisters {
 	cycles_since_stat_mode_0: u64,
 	cycles_since_last_last_mode_start_increment: [u64; 4],
 	cycles_since_stat_mode_2: u64,
+	cycles_since_stat_mode_3: u64,
 	pub lyc: u8,
 	pub wy: u8,
 	pub wx: u8,
@@ -297,6 +300,8 @@ pub struct Ppu {
 	current_dot: u16,
 	dot_target: u16,
 
+	last_mode: Option<PPUMode>,
+
 	sprite_buffer: [Option<OAMEntry>; 10],
 	sprite_count: usize,
 
@@ -313,6 +318,12 @@ pub struct Ppu {
 
 impl Ppu {
 	pub fn stop(&mut self) {
+		assert_eq!(
+			self.mode(),
+			PPUMode::VBlank,
+			"PPU disabled outside of VBlank: {:?}",
+			self.mode()
+		);
 		self.current_dot = 0;
 		self.dot_target = 0;
 		self.sprite_buffer = [None; 10];
@@ -320,6 +331,7 @@ impl Ppu {
 		self.current_draw_state = None;
 		self.wy_match = false;
 		self.registers.mode = PPUMode::HBlank;
+		self.last_mode = None;
 		self.first_frame = true;
 		self.first_line = true;
 		self.total_dots = 0;
@@ -347,6 +359,7 @@ impl Ppu {
 				ly_lyc: true,
 				cycles_since_stat_mode_0: 0,
 				cycles_since_stat_mode_2: 0,
+				cycles_since_stat_mode_3: 0,
 			},
 			vram: [0; 0x2000],
 			oam: [0; 0xA0],
@@ -357,6 +370,7 @@ impl Ppu {
 
 			current_dot: 0,
 			dot_target: 0,
+			last_mode: None,
 			sprite_buffer: [None; 10],
 			sprite_count: 0,
 			current_draw_state: None,
@@ -394,6 +408,8 @@ impl Ppu {
 					self.registers.cycles_since_stat_mode_0 = 0;
 				} else if stat_int && self.registers.mode == PPUMode::SearchingOAM {
 					self.registers.cycles_since_stat_mode_2 = 0;
+				} else if stat_int && self.registers.mode == PPUMode::TransferringData {
+					self.registers.cycles_since_stat_mode_3 = 0;
 				}
 				interrupts.write_if_lcd_stat(true);
 			}
@@ -411,13 +427,9 @@ impl Ppu {
 	}
 
 	pub fn get_stat(&self) -> u8 {
-		let ly_eq_lyc = match self.enabled() {
-			true => self.registers.ly == self.registers.lyc,
-			false => self.registers.ly_lyc,
-		};
 		(1 << 7)
 			| self.registers.stat_flags.flag_bits()
-			| ((ly_eq_lyc as u8) << 2)
+			| ((self.registers.ly_lyc as u8) << 2)
 			| self.mode().mode_flag()
 	}
 
@@ -474,7 +486,7 @@ impl Ppu {
 
 	pub fn cpu_read_oam(&self, address: u16) -> u8 {
 		let decoded_address = address - 0xFE00;
-		if self.enabled() && !self.first_frame && !OVERRIDE_PPU_MEMORY_ACCESS {
+		if self.enabled() && !OVERRIDE_PPU_MEMORY_ACCESS {
 			match self.mode() {
 				PPUMode::HBlank | PPUMode::VBlank => self.oam[decoded_address as usize],
 				PPUMode::SearchingOAM | PPUMode::TransferringData => 0xFF,
@@ -486,7 +498,7 @@ impl Ppu {
 
 	pub fn cpu_write_oam(&mut self, address: u16, value: u8) {
 		let decoded_address = address - 0xFE00;
-		if self.enabled() && !self.first_frame && !OVERRIDE_PPU_MEMORY_ACCESS {
+		if self.enabled() && !OVERRIDE_PPU_MEMORY_ACCESS {
 			match self.mode() {
 				PPUMode::HBlank | PPUMode::VBlank => self.oam[decoded_address as usize] = value,
 				PPUMode::SearchingOAM | PPUMode::TransferringData => {}
@@ -528,10 +540,22 @@ impl Ppu {
 		(self.registers.lcdc >> 7) == 1
 	}
 
-	pub fn set_mode(&mut self, interrupts: &mut Interrupts, mode: PPUMode) {
+	pub fn set_mode_next(&mut self, mode: PPUMode) {
+		self.last_mode = Some(self.mode());
+		self.registers.mode = mode;
+	}
+
+	pub fn set_mode_now(&mut self, interrupts: &mut Interrupts, mode: PPUMode) {
+		let last_mode = self.mode();
+		self.registers.mode = mode;
+		self.update_mode(interrupts, last_mode)
+	}
+
+	fn update_mode(&mut self, interrupts: &mut Interrupts, last_mode: PPUMode) {
+		let mode = self.mode();
 		self.registers.cycles_since_last_last_mode_start_increment[mode.mode_flag() as usize] = 0;
 		if mode == PPUMode::HBlank {
-			assert_eq!(self.mode(), PPUMode::TransferringData);
+			assert_eq!(last_mode, PPUMode::TransferringData);
 			assert!(self.current_dot >= 172);
 			assert!(self.current_dot <= 289);
 			self.dot_target = 376 - self.dot_target;
@@ -539,9 +563,10 @@ impl Ppu {
 			assert!(self.dot_target <= 204);
 		} else if mode == PPUMode::TransferringData {
 			if !self.first_frame {
-				assert_eq!(self.mode(), PPUMode::SearchingOAM);
+				assert_eq!(last_mode, PPUMode::SearchingOAM);
+				assert_eq!(self.current_dot, 80);
 			} else if self.registers.ly == 0 {
-				assert_eq!(self.mode(), PPUMode::HBlank);
+				assert_eq!(last_mode, PPUMode::HBlank);
 			}
 			self.current_draw_state = None;
 			self.dot_target = 160 + 12;
@@ -585,6 +610,12 @@ impl Ppu {
 			self.registers.cycles_since_last_ly_increment += 1;
 			self.registers.cycles_since_stat_mode_0 += 1;
 			self.registers.cycles_since_stat_mode_2 += 1;
+			self.registers.cycles_since_stat_mode_3 += 1;
+
+			if let Some(mode) = self.last_mode.take() {
+				self.update_mode(interrupts, mode);
+			}
+
 			match self.mode() {
 				PPUMode::SearchingOAM => {
 					self.registers.cycles_since_last_last_mode_start_increment[2] += 1;
@@ -597,7 +628,7 @@ impl Ppu {
 						self.sprite_count = 0;
 					}
 
-					if self.current_dot % 2 == 0 {
+					if !self.first_frame && self.current_dot % 2 == 0 {
 						let oam_item_idx: usize = (self.current_dot as usize / 2) * 4;
 
 						let oam_entry = OAMEntry::parse([
@@ -626,7 +657,7 @@ impl Ppu {
 					self.total_dots += 1;
 
 					if self.current_dot == 80 {
-						self.set_mode(interrupts, PPUMode::TransferringData);
+						self.set_mode_next(PPUMode::TransferringData);
 						assert_eq!(self.total_dots, 80);
 					} else {
 						assert!(self.current_dot < 80);
@@ -636,7 +667,7 @@ impl Ppu {
 				}
 				PPUMode::TransferringData => {
 					self.registers.cycles_since_last_last_mode_start_increment[3] += 1;
-					if !self.first_frame && self.current_dot == 0 {
+					if !self.first_line && self.current_dot == 0 {
 						assert_eq!(self.total_dots, 80);
 					}
 					// assert!(self.current_dot < self.dot_target);
@@ -653,13 +684,24 @@ impl Ppu {
 					self.current_dot += 1;
 					self.total_dots += 1;
 
-					if self.current_dot == self.dot_target {
+					let left = self.current_dot == self.dot_target;
+					let right = matches!(self.current_draw_state, Some(LineDrawingState::Finished));
+
+					if left || right {
+						assert_eq!(
+							left,
+							right,
+							"{}/{} dots remaining in state {:?}",
+							self.dot_target - self.current_dot,
+							self.dot_target,
+							self.current_draw_state
+						);
 						// assert_eq!(self.total_dots, match self.first_frame && self.first_line {
 						//     true => self.dot_target,
 						//     false => 80 + self.dot_target
 						// });
 						assert_eq!(self.current_draw_state, Some(LineDrawingState::Finished));
-						self.set_mode(interrupts, PPUMode::HBlank);
+						self.set_mode_next(PPUMode::HBlank);
 					}
 
 					false
@@ -671,18 +713,19 @@ impl Ppu {
 					if !self.first_line {
 						assert_ne!(self.dot_target, 0);
 					}
-					if self.first_line && self.current_dot == 80 && self.dot_target == 0 {
-						self.set_mode(interrupts, PPUMode::TransferringData);
+					if self.first_line && self.current_dot == 76 && self.dot_target == 0 {
+						self.set_mode_next(PPUMode::TransferringData);
 					} else if self.dot_target != 0 && self.current_dot == self.dot_target {
 						self.set_scanline(interrupts, self.registers.ly + 1);
 
 						assert_eq!(
 							self.total_dots,
-							456 /* match self.first_frame && self.first_line {
-							     * 	true => 456 - (80 - 64),
-							     * 	false => 456,
-							     * } */
+							match self.first_frame && self.first_line {
+								true => 456 - (80 - 76),
+								false => 456,
+							}
 						);
+
 						self.total_dots = 0;
 						self.first_line = false;
 
@@ -691,7 +734,7 @@ impl Ppu {
 							false => PPUMode::SearchingOAM,
 						};
 
-						self.set_mode(interrupts, next_mode);
+						self.set_mode_next(next_mode);
 					}
 
 					false
@@ -703,7 +746,7 @@ impl Ppu {
 					if self.current_dot % 456 == 0 {
 						if self.registers.ly >= 153 {
 							self.set_scanline(interrupts, 0);
-							self.set_mode(interrupts, PPUMode::SearchingOAM);
+							self.set_mode_next(PPUMode::SearchingOAM);
 							self.first_frame = false;
 							true
 						} else {
@@ -789,120 +832,121 @@ impl Ppu {
 				mut window_drawn,
 				draw_only_sprites,
 			) => {
-				let wx_match = (drawn_pixels as usize + 7) >= self.registers.wx as usize;
-				let scrolled_y = self.registers.ly.wrapping_add(scy) as usize;
-				let scrolled_x = drawn_pixels.wrapping_add(scx) as usize;
+				if !self.first_frame {
+					let wx_match = (drawn_pixels as usize + 7) >= self.registers.wx as usize;
+					let scrolled_y = self.registers.ly.wrapping_add(scy) as usize;
+					let scrolled_x = drawn_pixels.wrapping_add(scx) as usize;
 
-				let (bg_color_id, bg_color) = match draw_only_sprites {
-					true => (0, Color::White),
-					false => {
-						let tilemap_idx = scrolled_x / 8 + ((scrolled_y / 8) * 32);
-						let tilemap_value = self.read_tile_map()[tilemap_idx];
-						let (mut bg_color_id, mut bg_color) = Self::parse_tile_color(
-							self.read_bg_win_tile(tilemap_value),
-							scrolled_x % 8,
-							scrolled_y % 8,
-							&self.bgp,
-						);
-
-						if self.window_enabled() && wx_match && self.wy_match {
-							window_drawn = true;
-							let window_x = (drawn_pixels as u8)
-								.wrapping_sub(self.registers.wx.wrapping_sub(7))
-								as usize;
-							let window_y =
-								self.registers.ly.wrapping_sub(self.registers.wy) as usize;
-							let tilemap_idx = window_x / 8 + ((self.window_counter / 8) * 32);
-							let tilemap_value = self.read_window_tile_map()[tilemap_idx];
-							let (window_color_id, window_color) = Self::parse_tile_color(
+					let (bg_color_id, bg_color) = match draw_only_sprites {
+						true => (0, Color::White),
+						false => {
+							let tilemap_idx = scrolled_x / 8 + ((scrolled_y / 8) * 32);
+							let tilemap_value = self.read_tile_map()[tilemap_idx];
+							let (mut bg_color_id, mut bg_color) = Self::parse_tile_color(
 								self.read_bg_win_tile(tilemap_value),
-								window_x % 8,
-								window_y % 8,
+								scrolled_x % 8,
+								scrolled_y % 8,
 								&self.bgp,
 							);
-							bg_color_id = window_color_id;
-							bg_color = window_color;
+
+							if self.window_enabled() && wx_match && self.wy_match {
+								window_drawn = true;
+								let window_x = (drawn_pixels as u8)
+									.wrapping_sub(self.registers.wx.wrapping_sub(7))
+									as usize;
+								let window_y =
+									self.registers.ly.wrapping_sub(self.registers.wy) as usize;
+								let tilemap_idx = window_x / 8 + ((self.window_counter / 8) * 32);
+								let tilemap_value = self.read_window_tile_map()[tilemap_idx];
+								let (window_color_id, window_color) = Self::parse_tile_color(
+									self.read_bg_win_tile(tilemap_value),
+									window_x % 8,
+									window_y % 8,
+									&self.bgp,
+								);
+								bg_color_id = window_color_id;
+								bg_color = window_color;
+							}
+
+							(bg_color_id, bg_color)
 						}
+					};
 
-						(bg_color_id, bg_color)
-					}
-				};
-
-				let framebuffer_offset = ((self.registers.ly as usize * FB_WIDTH as usize)
-					+ drawn_pixels as usize)
-					* PIXEL_SIZE;
-				for (idx, byte) in bg_color.rgba().iter().enumerate() {
-					self.framebuffer[framebuffer_offset + idx] = *byte;
-				}
-
-				if (self.registers.lcdc >> 1) & 0b1 == 1 {
-					let mut sprite_buffer: Vec<OAMEntry> = Vec::new();
-					for sprite_idx in 0..self.sprite_count {
-						// WARNING: Sprites are not scrolled, they have an absolute position!
-						let sprite = self.sprite_buffer[sprite_idx]
-							.as_ref()
-							.expect("within the sprite count there should be no `None`s");
-
-						let x_valid =
-							drawn_pixels < sprite.x && drawn_pixels.wrapping_add(8) >= sprite.x;
-						let y_valid = self.registers.ly < sprite.y
-							&& self.registers.ly.wrapping_add(16) >= sprite.y;
-
-						if !sprite_buffer.iter().any(|existing| existing.x == sprite.x)
-							&& x_valid && y_valid
-						{
-							sprite_buffer.push(*sprite);
-						}
+					let framebuffer_offset = ((self.registers.ly as usize * FB_WIDTH as usize)
+						+ drawn_pixels as usize) * PIXEL_SIZE;
+					for (idx, byte) in bg_color.rgba().iter().enumerate() {
+						self.framebuffer[framebuffer_offset + idx] = *byte;
 					}
 
-					sprite_buffer.sort_by(|l, r| r.x.cmp(&l.x));
+					if (self.registers.lcdc >> 1) & 0b1 == 1 {
+						let mut sprite_buffer: Vec<OAMEntry> = Vec::new();
+						for sprite_idx in 0..self.sprite_count {
+							// WARNING: Sprites are not scrolled, they have an absolute position!
+							let sprite = self.sprite_buffer[sprite_idx]
+								.as_ref()
+								.expect("within the sprite count there should be no `None`s");
 
-					// TODO: Adjust mode length based on sprites
-					for sprite in &sprite_buffer {
-						let mut sprite_x_idx =
-							drawn_pixels.wrapping_sub(sprite.x.wrapping_sub(8)) as usize;
-						let mut sprite_y_idx =
-							self.registers.ly.wrapping_sub(sprite.y.wrapping_sub(16)) as usize;
+							let x_valid =
+								drawn_pixels < sprite.x && drawn_pixels.wrapping_add(8) >= sprite.x;
+							let y_valid = self.registers.ly < sprite.y
+								&& self.registers.ly.wrapping_add(16) >= sprite.y;
 
-						if sprite.y_flip() {
-							let sprite_offset = match self.sprite_height() {
-								SpriteHeight::Eight => 7,
-								SpriteHeight::Sixteen => 15,
+							if !sprite_buffer.iter().any(|existing| existing.x == sprite.x)
+								&& x_valid && y_valid
+							{
+								sprite_buffer.push(*sprite);
+							}
+						}
+
+						sprite_buffer.sort_by(|l, r| r.x.cmp(&l.x));
+
+						// TODO: Adjust mode length based on sprites
+						for sprite in &sprite_buffer {
+							let mut sprite_x_idx =
+								drawn_pixels.wrapping_sub(sprite.x.wrapping_sub(8)) as usize;
+							let mut sprite_y_idx =
+								self.registers.ly.wrapping_sub(sprite.y.wrapping_sub(16)) as usize;
+
+							if sprite.y_flip() {
+								let sprite_offset = match self.sprite_height() {
+									SpriteHeight::Eight => 7,
+									SpriteHeight::Sixteen => 15,
+								};
+								sprite_y_idx = sprite_offset - sprite_y_idx;
+							}
+
+							if sprite.x_flip() {
+								sprite_x_idx = 7 - sprite_x_idx;
+							}
+
+							let tile_idx = match self.sprite_height() {
+								SpriteHeight::Eight => sprite.tile_idx,
+								SpriteHeight::Sixteen => match sprite_y_idx >= 8 {
+									true => sprite.tile_idx | 1,
+									false => sprite.tile_idx & 0xFE,
+								},
 							};
-							sprite_y_idx = sprite_offset - sprite_y_idx;
-						}
 
-						if sprite.x_flip() {
-							sprite_x_idx = 7 - sprite_x_idx;
-						}
+							if sprite_y_idx >= 8 {
+								sprite_y_idx -= 8;
+								assert!(sprite_y_idx < 8);
+							}
 
-						let tile_idx = match self.sprite_height() {
-							SpriteHeight::Eight => sprite.tile_idx,
-							SpriteHeight::Sixteen => match sprite_y_idx >= 8 {
-								true => sprite.tile_idx | 1,
-								false => sprite.tile_idx & 0xFE,
-							},
-						};
+							let color_id =
+								self.read_obj_tile_colour_id(tile_idx, sprite_x_idx, sprite_y_idx);
+							let palette = &self.obp[sprite.palette_number() as usize];
+							let sprite_color = palette.color_from_2bit(color_id);
 
-						if sprite_y_idx >= 8 {
-							sprite_y_idx -= 8;
-							assert!(sprite_y_idx < 8);
-						}
+							let sprite_covered = sprite.covered_by_bg_window() && bg_color_id != 0;
 
-						let color_id =
-							self.read_obj_tile_colour_id(tile_idx, sprite_x_idx, sprite_y_idx);
-						let palette = &self.obp[sprite.palette_number() as usize];
-						let sprite_color = palette.color_from_2bit(color_id);
+							if color_id != 0 && !sprite_covered {
+								let [r, g, b, a] = *sprite_color.rgba();
 
-						let sprite_covered = sprite.covered_by_bg_window() && bg_color_id != 0;
-
-						if color_id != 0 && !sprite_covered {
-							let [r, g, b, a] = *sprite_color.rgba();
-
-							self.sprite_framebuffer[framebuffer_offset + 0] = r;
-							self.sprite_framebuffer[framebuffer_offset + 1] = g;
-							self.sprite_framebuffer[framebuffer_offset + 2] = b;
-							self.sprite_framebuffer[framebuffer_offset + 3] = a;
+								self.sprite_framebuffer[framebuffer_offset + 0] = r;
+								self.sprite_framebuffer[framebuffer_offset + 1] = g;
+								self.sprite_framebuffer[framebuffer_offset + 2] = b;
+								self.sprite_framebuffer[framebuffer_offset + 3] = a;
+							}
 						}
 					}
 				}
@@ -912,8 +956,10 @@ impl Ppu {
 					if window_drawn {
 						self.window_counter += 1;
 						self.dot_target += 6;
+						self.current_draw_state = Some(LineDrawingState::WaitWindow(5));
+					} else {
+						self.current_draw_state = Some(LineDrawingState::Finished);
 					}
-					self.current_draw_state = Some(LineDrawingState::Finished);
 				} else {
 					self.current_draw_state = Some(LineDrawingState::BackgroundAndObjectFifo(
 						scx,
@@ -923,6 +969,12 @@ impl Ppu {
 						draw_only_sprites,
 					));
 				}
+			}
+			LineDrawingState::WaitWindow(remaining) => {
+				self.current_draw_state = Some(match remaining {
+					0 => LineDrawingState::Finished,
+					remaining => LineDrawingState::WaitWindow(remaining - 1),
+				})
 			}
 			LineDrawingState::Finished => unreachable!(),
 		}

@@ -5,10 +5,7 @@ pub struct Memory {
 
 impl Memory {
 	pub fn new() -> Self {
-		Self {
-			wram: [0; 0x2000],
-			hram: [0; 0xAF],
-		}
+		Self { wram: [0; 0x2000], hram: [0; 0xAF] }
 	}
 
 	pub fn get_bootrom_disabled(&self) -> u8 {

@@ -238,6 +238,18 @@ jobs:
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_0_timing.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_0_timing.bin
 
+      - name: Run test ROM (mooneye-test-suite ppu/intr_2_mode0_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_mode0_timing.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_mode0_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite ppu/intr_2_mode3_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_mode3_timing.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_mode3_timing.bin
+
+      - name: Run test ROM (mooneye-test-suite ppu/intr_2_oam_ok_timing)
+        if: always()
+        run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_oam_ok_timing.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_oam_ok_timing.bin
+
       - name: Run test ROM (mooneye-test-suite ppu/stat_irq_blocking)
         if: always()
         run: ./target/release/meowgb-tests test-roms/mooneye-test-suite/serial-roms/ppu/stat_irq_blocking.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/stat_irq_blocking.bin

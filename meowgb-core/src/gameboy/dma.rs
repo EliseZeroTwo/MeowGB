@@ -69,7 +69,12 @@ impl DmaState {
 		self.restarting = Some((base, false));
 	}
 
-	pub fn read_next_byte(&self, ppu: &Ppu, memory: &Memory, cartridge: Option<&GenericCartridge>) -> u8 {
+	pub fn read_next_byte(
+		&self,
+		ppu: &Ppu,
+		memory: &Memory,
+		cartridge: Option<&GenericCartridge>,
+	) -> u8 {
 		let read_address = self.dma_in_progress.unwrap() as usize;
 		match self.original_base {
 			0..=0x7F => match cartridge {
@@ -83,7 +88,7 @@ impl DmaState {
 			},
 			0xC0..=0xDF => memory.wram[read_address - 0xC000],
 			0xE0..=0xFD => memory.wram[read_address - 0xE000],
-			0xFE..=0xFF => 0xFF
+			0xFE..=0xFF => 0xFF,
 		}
 	}
 
@@ -103,9 +108,12 @@ impl DmaState {
 			None => {}
 		}
 
-		// We do not clear this after running because the "in progress" should remain the entire cycle
+		// We do not clear this after running because the "in progress" should remain
+		// the entire cycle
 		self.dma_in_progress = match self.remaining_cycles > 0 {
-			true => Some(((self.original_base as u16) << 8) | (0xA0 - self.remaining_cycles) as u16),
+			true => {
+				Some(((self.original_base as u16) << 8) | (0xA0 - self.remaining_cycles) as u16)
+			}
 			false => None,
 		};
 

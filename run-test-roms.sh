@@ -557,6 +557,36 @@ else
   echo "Failed: $res"
 fi
 
+echo "Running test ROM ./test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_mode0_timing.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_mode0_timing.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_mode0_timing.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_mode3_timing.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_mode3_timing.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_mode3_timing.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
+echo "Running test ROM ./test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_oam_ok_timing.gb"
+
+TEST_TOTAL=$((TEST_TOTAL + 1))
+
+if res=$(./target/release/meowgb-tests test-roms/mooneye-test-suite/serial-roms/ppu/intr_2_oam_ok_timing.gb test-serial -m 100000000 -s meowgb-tests/expected_output/serial/mooneye-test-suite/ppu/intr_2_oam_ok_timing.bin 2>&1 > /dev/null) ; then
+  TEST_SUCCESS=$((TEST_SUCCESS + 1))
+else
+  echo "Failed: $res"
+fi
+
 echo "Running test ROM ./test-roms/mooneye-test-suite/serial-roms/ppu/stat_irq_blocking.gb"
 
 TEST_TOTAL=$((TEST_TOTAL + 1))
