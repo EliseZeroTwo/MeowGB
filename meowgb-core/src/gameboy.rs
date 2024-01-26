@@ -383,9 +383,9 @@ impl<S: SerialWriter> Gameboy<S> {
 			0xFF44 => {} // LY is read only
 			0xFF45 => self.ppu.set_lyc(&mut self.interrupts, value),
 			0xFF46 => self.dma.init_request(value),
-			0xFF47 => self.ppu.bgp.write_bgp(value),
-			0xFF48 => self.ppu.obp[0].write_obp(value),
-			0xFF49 => self.ppu.obp[1].write_obp(value),
+			0xFF47 => self.ppu.bgp.write(value),
+			0xFF48 => self.ppu.obp[0].write(value),
+			0xFF49 => self.ppu.obp[1].write(value),
 			0xFF4A => self.ppu.registers.wy = value,
 			0xFF4B => self.ppu.registers.wx = value,
 			0xFF4C..=0xFF4E => {} // Unused

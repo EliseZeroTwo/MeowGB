@@ -46,21 +46,14 @@ impl Palette {
 	}
 
 	pub fn new_obp() -> Self {
-		Self { id0: Color::Transparent, id1: Color::LGray, id2: Color::DGray, id3: Color::Black }
+		Self { id0: Color::White, id1: Color::LGray, id2: Color::DGray, id3: Color::Black }
 	}
 
-	pub fn write_bgp(&mut self, value: u8) {
-		self.id0 = Color::from_bg_2bit(value);
-		self.id1 = Color::from_bg_2bit(value >> 2);
-		self.id2 = Color::from_bg_2bit(value >> 4);
-		self.id3 = Color::from_bg_2bit(value >> 6);
-	}
-
-	pub fn write_obp(&mut self, value: u8) {
-		self.id0 = Color::from_obj_2bit(value);
-		self.id1 = Color::from_obj_2bit(value >> 2);
-		self.id2 = Color::from_obj_2bit(value >> 4);
-		self.id3 = Color::from_obj_2bit(value >> 6);
+	pub fn write(&mut self, value: u8) {
+		self.id0 = Color::from_2bit(value);
+		self.id1 = Color::from_2bit(value >> 2);
+		self.id2 = Color::from_2bit(value >> 4);
+		self.id3 = Color::from_2bit(value >> 6);
 	}
 
 	pub fn value(&self) -> u8 {
@@ -111,7 +104,6 @@ pub enum Color {
 	LGray,
 	DGray,
 	Black,
-	Transparent,
 }
 
 impl Color {
@@ -119,14 +111,12 @@ impl Color {
 	const LGRAY: [u8; PIXEL_SIZE] = [0x88, 0xc0, 0x70, 0xFF];
 	const DGRAY: [u8; PIXEL_SIZE] = [0x34, 0x68, 0x56, 0xFF];
 	const BLACK: [u8; PIXEL_SIZE] = [0x08, 0x18, 0x20, 0xFF];
-	const TRANSPARENT: [u8; PIXEL_SIZE] = [0x00, 0x00, 0x00, 0x00];
 	pub fn rgba(self) -> &'static [u8; PIXEL_SIZE] {
 		match self {
 			Color::White => &Self::WHITE,
 			Color::LGray => &Self::LGRAY,
 			Color::DGray => &Self::DGRAY,
 			Color::Black => &Self::BLACK,
-			Color::Transparent => &Self::TRANSPARENT,
 		}
 	}
 
@@ -137,24 +127,13 @@ impl Color {
 			Self::LGRAY => Some(Self::LGray),
 			Self::DGRAY => Some(Self::DGray),
 			Self::BLACK => Some(Self::Black),
-			Self::TRANSPARENT => Some(Self::Transparent),
 			_ => None,
 		}
 	}
 
-	pub fn from_bg_2bit(value: u8) -> Self {
+	pub fn from_2bit(value: u8) -> Self {
 		match value & 0b11 {
 			0 => Self::White,
-			1 => Self::LGray,
-			2 => Self::DGray,
-			3 => Self::Black,
-			_ => unreachable!(),
-		}
-	}
-
-	pub fn from_obj_2bit(value: u8) -> Self {
-		match value & 0b11 {
-			0 => Self::Transparent,
 			1 => Self::LGray,
 			2 => Self::DGray,
 			3 => Self::Black,
@@ -168,7 +147,6 @@ impl Color {
 			Color::LGray => 1,
 			Color::DGray => 2,
 			Color::Black => 3,
-			Color::Transparent => 0,
 		}
 	}
 
@@ -226,8 +204,8 @@ impl OAMEntry {
 		(self.flags >> 5) & 0b1 == 1
 	}
 
-	pub fn palette_number(&self) -> bool {
-		(self.flags >> 4) & 0b1 == 1
+	pub fn palette_number(&self) -> usize {
+		(self.flags >> 4) as usize & 0b1
 	}
 }
 
@@ -540,15 +518,9 @@ impl Ppu {
 		(self.registers.lcdc >> 7) == 1
 	}
 
-	pub fn set_mode_next(&mut self, mode: PPUMode) {
+	pub fn set_mode(&mut self, mode: PPUMode) {
 		self.last_mode = Some(self.mode());
 		self.registers.mode = mode;
-	}
-
-	pub fn set_mode_now(&mut self, interrupts: &mut Interrupts, mode: PPUMode) {
-		let last_mode = self.mode();
-		self.registers.mode = mode;
-		self.update_mode(interrupts, last_mode)
 	}
 
 	fn update_mode(&mut self, interrupts: &mut Interrupts, last_mode: PPUMode) {
@@ -657,7 +629,7 @@ impl Ppu {
 					self.total_dots += 1;
 
 					if self.current_dot == 80 {
-						self.set_mode_next(PPUMode::TransferringData);
+						self.set_mode(PPUMode::TransferringData);
 						assert_eq!(self.total_dots, 80);
 					} else {
 						assert!(self.current_dot < 80);
@@ -696,12 +668,8 @@ impl Ppu {
 							self.dot_target,
 							self.current_draw_state
 						);
-						// assert_eq!(self.total_dots, match self.first_frame && self.first_line {
-						//     true => self.dot_target,
-						//     false => 80 + self.dot_target
-						// });
 						assert_eq!(self.current_draw_state, Some(LineDrawingState::Finished));
-						self.set_mode_next(PPUMode::HBlank);
+						self.set_mode(PPUMode::HBlank);
 					}
 
 					false
@@ -714,7 +682,7 @@ impl Ppu {
 						assert_ne!(self.dot_target, 0);
 					}
 					if self.first_line && self.current_dot == 76 && self.dot_target == 0 {
-						self.set_mode_next(PPUMode::TransferringData);
+						self.set_mode(PPUMode::TransferringData);
 					} else if self.dot_target != 0 && self.current_dot == self.dot_target {
 						self.set_scanline(interrupts, self.registers.ly + 1);
 
@@ -734,7 +702,7 @@ impl Ppu {
 							false => PPUMode::SearchingOAM,
 						};
 
-						self.set_mode_next(next_mode);
+						self.set_mode(next_mode);
 					}
 
 					false
@@ -746,7 +714,7 @@ impl Ppu {
 					if self.current_dot % 456 == 0 {
 						if self.registers.ly >= 153 {
 							self.set_scanline(interrupts, 0);
-							self.set_mode_next(PPUMode::SearchingOAM);
+							self.set_mode(PPUMode::SearchingOAM);
 							self.first_frame = false;
 							true
 						} else {
@@ -932,14 +900,14 @@ impl Ppu {
 								assert!(sprite_y_idx < 8);
 							}
 
-							let color_id =
-								self.read_obj_tile_colour_id(tile_idx, sprite_x_idx, sprite_y_idx);
-							let palette = &self.obp[sprite.palette_number() as usize];
-							let sprite_color = palette.color_from_2bit(color_id);
-
+							let palette_color_idx =
+								self.read_obj_tile_colour_id(tile_idx, sprite_x_idx, sprite_y_idx); // If the index is 0, it is just treated as being transparent
 							let sprite_covered = sprite.covered_by_bg_window() && bg_color_id != 0;
 
-							if color_id != 0 && !sprite_covered {
+							if palette_color_idx != 0 && !sprite_covered {
+								let palette = &self.obp[sprite.palette_number()];
+								let sprite_color = palette.color_from_2bit(palette_color_idx);
+
 								let [r, g, b, a] = *sprite_color.rgba();
 
 								self.sprite_framebuffer[framebuffer_offset + 0] = r;

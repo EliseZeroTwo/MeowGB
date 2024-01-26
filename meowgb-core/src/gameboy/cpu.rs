@@ -64,7 +64,7 @@ pub struct Registers {
 	pub current_prefixed_opcode: Option<u8>,
 	pub mem_read_hold: Option<u8>,
 	pub mem_op_happened: bool,
-	pub in_interrupt_vector: Option<u8>,
+	pub in_interrupt_vector: bool,
 }
 
 impl PartialEq for Registers {
@@ -162,26 +162,14 @@ pub fn tick_cpu(state: &mut Gameboy<impl SerialWriter>) {
 	}
 
 	if state.registers.cycle == 0 && state.interrupts.ime {
-		if state.interrupts.read_ie_vblank() && state.interrupts.read_if_vblank() {
-			state.registers.in_interrupt_vector = Some(0);
+		state.registers.in_interrupt_vector = (state.interrupts.read_ie_vblank()
+			&& state.interrupts.read_if_vblank())
+			|| (state.interrupts.read_ie_lcd_stat() && state.interrupts.read_if_lcd_stat())
+			|| (state.interrupts.read_ie_timer() && state.interrupts.read_if_timer())
+			|| (state.interrupts.read_ie_serial() && state.interrupts.read_if_serial())
+			|| (state.interrupts.read_ie_joypad() && state.interrupts.read_if_joypad());
+		if state.registers.in_interrupt_vector {
 			state.interrupts.ime = false;
-			state.interrupts.write_if_vblank(false);
-		} else if state.interrupts.read_ie_lcd_stat() && state.interrupts.read_if_lcd_stat() {
-			state.registers.in_interrupt_vector = Some(1);
-			state.interrupts.ime = false;
-			state.interrupts.write_if_lcd_stat(false);
-		} else if state.interrupts.read_ie_timer() && state.interrupts.read_if_timer() {
-			state.registers.in_interrupt_vector = Some(2);
-			state.interrupts.ime = false;
-			state.interrupts.write_if_timer(false);
-		} else if state.interrupts.read_ie_serial() && state.interrupts.read_if_serial() {
-			state.registers.in_interrupt_vector = Some(3);
-			state.interrupts.ime = false;
-			state.interrupts.write_if_serial(false);
-		} else if state.interrupts.read_ie_joypad() && state.interrupts.read_if_joypad() {
-			state.registers.in_interrupt_vector = Some(4);
-			state.interrupts.ime = false;
-			state.interrupts.write_if_joypad(false);
 		}
 	}
 
@@ -196,7 +184,7 @@ pub fn tick_cpu(state: &mut Gameboy<impl SerialWriter>) {
 		state.registers.pc = state.registers.pc.overflowing_sub(1).0;
 	}
 
-	let result = if let Some(idx) = state.registers.in_interrupt_vector {
+	let result = if state.registers.in_interrupt_vector {
 		match state.registers.cycle {
 			0 => {
 				// Invalidate prefetch if present
@@ -214,22 +202,47 @@ pub fn tick_cpu(state: &mut Gameboy<impl SerialWriter>) {
 			}
 			4 => {
 				let original_pc = state.registers.pc;
+				let idx;
+
+				if state.interrupts.read_ie_vblank() && state.interrupts.read_if_vblank() {
+					idx = 0;
+					state.interrupts.write_if_vblank(false);
+				} else if state.interrupts.read_ie_lcd_stat() && state.interrupts.read_if_lcd_stat()
+				{
+					idx = 1;
+					state.interrupts.write_if_lcd_stat(false);
+				} else if state.interrupts.read_ie_timer() && state.interrupts.read_if_timer() {
+					idx = 2;
+					state.interrupts.write_if_timer(false);
+				} else if state.interrupts.read_ie_serial() && state.interrupts.read_if_serial() {
+					idx = 3;
+					state.interrupts.write_if_serial(false);
+				} else if state.interrupts.read_ie_joypad() && state.interrupts.read_if_joypad() {
+					idx = 4;
+					state.interrupts.write_if_joypad(false);
+				} else {
+					idx = 5;
+					println!("IRQ disabled!");
+				}
+
+				// assert_eq!(vector, idx);
+
 				state.registers.pc = match idx {
 					0 => 0x40,
 					1 => 0x48,
 					2 => 0x50,
 					3 => 0x58,
 					4 => 0x60,
+					5 => 0x00,
 					_ => unreachable!(),
 				};
-				state.registers.in_interrupt_vector = None;
-				state.registers.opcode_bytecount = Some(0);
+				state.registers.in_interrupt_vector = false;
 				log::debug!(
 					"Triggering interrupt to {:#X} from {:#X}",
 					state.registers.pc,
 					original_pc
 				);
-				CycleResult::Finished
+				CycleResult::FinishedKeepPc
 			}
 			_ => unreachable!(),
 		}
